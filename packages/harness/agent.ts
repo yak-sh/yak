@@ -93,6 +93,8 @@ import { inheritedInstructions } from './legacy_instructions.ts'
 import { offeredTo, type Wear, wornBy, wornLayers } from './worn.ts'
 import { PART } from '@yaks/persona'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
+import { recoverSettled } from './unfinished.ts'
+import type { Harness } from './store.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
@@ -160,6 +162,7 @@ export type Host = {
   vocab: Vocab
   me: Eid
   gone?: (holder: Eid) => boolean | Promise<boolean>
+  report?: Harness['report']
 }
 
 /** Where a defect happened: what was running, and in which transcript. */
@@ -650,6 +653,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     report: (error, session, phase) => report(error, { session, phase }),
     ...opts.refused ? { refused: opts.refused } : {},
     each: opts.each,
+    recoverSettled: recoverSettled(h.g, h.report),
     hold: opts.hold,
   }
 }

@@ -669,13 +669,20 @@ export let stopAll = async (
 // told. A child's dispatch settles after its report is written, or held for
 // helpers of its own (./run.ts), so a settled child still works while one of
 // its own does.
-let working = async (g: Graph, session: Eid): Promise<boolean> => {
+export let workingChildren = async (
+  g: Graph,
+  session: Eid,
+  repliesOnly = false,
+): Promise<boolean> => {
   for (let c of await children(g, session)) {
+    if (repliesOnly && comp(c, 'spawned')?.notice) continue
     let place = dispatchStatus(c)
     if (place != null && place != 'settled') return true
     let status = await entryStatus(g, c.entity.eid)
     if (!['settled', 'failed', 'stopped'].includes(status)) return true
-    if (status == 'settled' && await working(g, c.entity.eid)) return true
+    if (status == 'settled' && await workingChildren(g, c.entity.eid)) {
+      return true
+    }
   }
   return false
 }
@@ -690,7 +697,7 @@ export let deliverChild = async (
   let link = comp(await row(g, child), 'spawned')
   if (!link?.parent || !await row(g, String(link.parent))) return
   if (link.notice) {
-    return childNotice(g, child, link, now, () => working(g, child))
+    return childNotice(g, child, link, now, () => workingChildren(g, child))
   }
   // A settled child's receipt usually already exists. Inspect its local tail
   // before materializing the inherited prefix (which can be very large).
@@ -728,7 +735,7 @@ export let deliverChild = async (
   if (!['settled', 'failed', 'stopped'].includes(status)) return
   // A child whose own helpers still work has not answered yet: their reports
   // will wake it, and one call reports once, after they end.
-  if (status == 'settled' && await working(g, child)) return
+  if (status == 'settled' && await workingChildren(g, child)) return
   // The model may have finished while the fast-path reads were awaiting.
   // Use the same terminal snapshot for the receipt identity and its text.
   last = (await newestOf(g, child))!

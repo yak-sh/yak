@@ -83,10 +83,13 @@ final results also owe model requests immediately, including while another tool
 is still running. Submitted progress stays in the transcript and provider
 continuation prefix unchanged.
 
-After each native model and tool step the host checks for a native final with
-unblocked claimed work, and reports that condition without automatically
-resuming the session or spending another model turn. Explicit blockers and
-unfinished task dependencies are excluded.
+When a native session settles with an open claim, the harness gives it one
+recovery input per claim. The session can finish the task, record what remains
+and release its claim, or record what the task is waiting on. If the claim is
+still open when the session settles again, the harness records its latest reply
+on the task, releases the claim, and reports the fallback to the tracker.
+Blocked work, dependencies, pending child or tool results, answered comment
+sessions, and work owned by Heal keep their existing paths.
 
 The `harness-steps` benchmark measures native step CPU time with an instantly
 answered scripted model over an isolated graph. It compares that work with the

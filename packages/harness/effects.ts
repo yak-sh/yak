@@ -23,7 +23,6 @@ import { usingFor } from './default.ts'
 import { lend } from './agent.ts'
 import { here, type Opts } from './local.ts'
 import { hosted } from './store.ts'
-import { unfinishedEach } from './unfinished.ts'
 import { machines } from './session_machines.ts'
 import {
   exposed,
@@ -203,7 +202,6 @@ export let effects = (
         let runner = lend(lent)
         return {
           ...runner,
-          each: unfinishedEach(host, runner.each),
           answers: async (using, session) => {
             if (!await runner.answers?.(using, session)) return false
             if (session) await opening(session)

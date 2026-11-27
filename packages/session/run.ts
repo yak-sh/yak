@@ -79,6 +79,9 @@ export type Runner = Deps & ChildLimits & {
   waiting?: number
   /** each step, as it lands */
   each?: (step: Step, session?: string) => void | Promise<void>
+  /** Reconcile a settled reply before terminal delivery. True when it
+   * queued another turn. Replayed along with terminal delivery. */
+  recoverSettled?: (session: Eid) => Promise<boolean>
   /** a transcript that ended (settled, failed or stopped), however it did: a
    * step's end, or a stop written while it rested. Told again on a later pass
    * that finds it ended, so what it does is idempotent (./answer.ts
@@ -146,7 +149,9 @@ let holds = (g: Graph) =>
 // queued recovery can run again, and telling is idempotent.
 let ended = async (g: Graph, session: Eid, r: Runner) => {
   await rouse(g, session)
-  if (await currentStatus(g, session) == 'pending') return
+  let status = await currentStatus(g, session)
+  if (!ENDED.includes(status)) return
+  if (status == 'settled' && await r.recoverSettled?.(session)) return
   await r.ended?.(session)
   // A native helper's ending is what a managed one's exit is to it.
   if (

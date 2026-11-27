@@ -4,13 +4,11 @@
 import { type Samples, stopwatch } from '@yaks/benchmark'
 import type { Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
-import type { Host } from '@yaks/host'
 import { textOf, transcript } from '@yaks/session'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 import { seed } from './agent.ts'
 import { agent } from './agent.ts'
 import { harness } from './testing.ts'
-import { unfinishedEach } from './unfinished.ts'
 
 const ROUNDS = 3
 const STEPS = 12
@@ -66,7 +64,6 @@ let round = async (steps: number) => {
     name: 'scripted',
     tools,
     model,
-    each: unfinishedEach({ graph: h.g } as Host),
   })
   let timer: ReturnType<typeof setTimeout> | undefined
   try {

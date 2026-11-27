@@ -1,108 +1,198 @@
-// A native final that leaves claimed work unfinished, reported after each step.
-// Step durations are not compared here: a session's own earlier steps are no
-// baseline on a shared box, and the `harness-steps` benchmark guards overhead.
+// Recover a native reply that left its claim open. A recovery input is durable
+// and belongs to one claim. If its answer still leaves the claim open, keep
+// the reply on the task and release the claim in one write.
 
-import type { Comp } from '@yaks/graph'
-import { line } from '@yaks/query'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
+import { token } from '@yaks/graph/sha256'
 import type { Host } from '@yaks/host'
-import type { Runner, Step } from '@yaks/session'
+import { human } from '@yaks/id'
+import { line } from '@yaks/query'
+import {
+  currentStatus,
+  openOf,
+  reach,
+  steered,
+  workingChildren,
+} from '@yaks/session'
 
-/** Await the check before a step returns; a failed check cannot change it. */
-export let unfinishedEach = (
-  host: Host,
-  each?: Runner['each'],
-): NonNullable<Runner['each']> =>
-async (step, session) => {
-  await each?.(step, session)
-  if (!session || step.did == 'nothing') return
-  try {
-    await unfinishedNativeFinal(host, session, step)
-  } catch (error) {
-    try {
-      await host.report?.(error, {
-        during: { session },
-        tags: { handler: 'unfinished' },
-      })
-    } catch (failure) {
-      console.error('unfinished reporter failed', failure)
-    }
-  }
-}
+let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
+  b?.[name] as Comp | undefined
 
-/** A native final with unblocked claimed work is not successful completion.
- * Report the idle handoff; do not resume it automatically or spend another turn.
- * A session a person's comment started holds the comment's task so his next
- * comment reaches it (@yaks/session `starting`), but what it was asked is the
- * comment: once it has commented back on that task, settling is its answer. */
-export let unfinishedNativeFinal = async (
-  host: Host,
-  session: string,
-  step: Step,
-): Promise<void> => {
-  if (step.status != 'settled' || step.did != 'asked') return
-  let [native] = await host.graph.read(
-    line`.entity.eid=${session}&.native&.fields=entity.eid,session.source`,
+type Report = Host['report']
+
+// A comment-started session keeps its claim once it has answered the comment.
+// Heal's follower owns the continuation of its fixer unless muted or stopped.
+let candidates = async (g: Graph, session: string): Promise<Bundle[]> => {
+  if (!g.vocab.comp('task') || !g.vocab.comp('native')) return []
+  let [native] = await g.read(
+    line`.entity.eid=${session}&.native&!session.ended&.fields=entity.eid,session.source`,
   )
-  if (!native) return
-  let source = (native.session as Comp | undefined)?.source
-  let [asked] = source
-    ? await host.graph.read(
-      line`.entity.eid=${String(source)}&.fields=comment.target`,
-    )
-    : []
-  let answering = (asked?.comment as Comp | undefined)?.target
-  let tasks = await host.graph.read(
-    line`.task&.claim.session=${session}&!completed&!cancelled&!blocked&.fields=entity.eid,doc.title`,
+  if (!native) return []
+  let tasks = await g.read(
+    line`.task&.claim.session=${session}&!completed&!cancelled&!blocked&.fields=entity,doc.title,claim.at`,
   )
-  // Heal's follower owns continuation of an open fixer, including the quiet
-  // interval between its final answer and the next tracker reconciliation.
-  // A fixer mark alone is history: without heal (its `fixer` undeclared) or
-  // with its project muted, the report is not suppressed.
-  const [fixer] = host.graph.vocab.comp('fixer')
-    ? await host.graph.get([session], ['fixer', 'stop', 'exit'])
+  if (!tasks.length) return []
+  let source = comp(native, 'session')?.source
+  let [asked] = source ? await g.get([String(source)], ['comment']) : []
+  let answering = comp(asked, 'comment')?.target
+  let [fixer] = g.vocab.comp('fixer')
+    ? await g.get([session], ['fixer', 'stop', 'exit'])
     : []
-  const bug = (fixer?.fixer as Comp | undefined)?.bug
+  let bug = comp(fixer, 'fixer')?.bug
+  let open = []
   for (let task of tasks) {
-    if (task.entity.eid == answering) {
-      let [answer] = await host.graph.read(
-        line`.comment.target=${
-          String(answering)
-        }&.created.via=${session}&.fields=entity.eid&.limit=1`,
+    let id = task.entity.eid
+    if (id == answering) {
+      let [answer] = await g.read(
+        line`.comment.target=${id}&.created.via=${session}&.fields=entity.eid&.limit=1`,
       )
       if (answer) continue
     }
     if (bug && !fixer?.stop && !fixer?.exit) {
-      const [muted] = await host.graph.read(
-        line`.entity.eid=${task.entity.eid}&.filed.project.nofix&.fields=entity.eid`,
+      let [muted] = await g.read(
+        line`.entity.eid=${id}&.filed.project.nofix&.fields=entity.eid`,
       )
-      const [owned] = await host.graph.read(
-        line`.about&.edge.from=${task.entity.eid}&.edge.to=${
+      let [owned] = await g.read(
+        line`.about&.edge.from=${id}&.edge.to=${
           String(bug)
         }&.fields=entity.eid&.limit=1`,
       )
-      if (!muted && (owned || task.entity.eid == bug)) continue
+      if (!muted && (owned || id == bug)) continue
     }
-    let waiting = await host.graph.read(
-      line`(.requires|.contains)&.edge.from=${task.entity.eid}&.edge.to.task&!edge.to.completed&!edge.to.cancelled&.fields=entity.eid&.limit=1`,
+    let [waiting] = await g.read(
+      line`(.requires|.contains)&.edge.from=${id}&.edge.to.task&!edge.to.completed&!edge.to.cancelled&.fields=entity.eid&.limit=1`,
     )
-    if (waiting.length) continue
-    let final = step.added.findLast((b) => b.ask)?.entity.eid ??
-      step.added.at(-1)?.entity.eid
-    if (!final) continue
-    await host.report?.(
-      new Error(
-        `Native session settled with unfinished claimed work: ${
-          String((task.doc as Comp | undefined)?.title ?? task.entity.eid)
-        }`,
-      ),
-      {
-        eid: derivedEid(
-          `native-unfinished|${session}|${task.entity.eid}|${final}`,
-        ),
-        during: { session, entity: task.entity.eid },
-        tags: { step: final, condition: 'settled-unfinished' },
-      },
-    )
+    if (!waiting) open.push(task)
   }
+  return open
+}
+
+let guard = (session: string, task: Bundle): Bundle => ({
+  entity: task.entity,
+  $was: {
+    claim: { session: token(session), at: token(comp(task, 'claim')?.at) },
+    completed: { at: token(null) },
+    cancelled: { at: token(null) },
+    blocked: { since: token(null) },
+  },
+})
+
+let recovery = (session: string, task: Bundle) =>
+  derivedEid(
+    `native-recovery|${session}|${task.entity.eid}|${comp(task, 'claim')?.at}`,
+  )
+
+let reminder = (
+  g: Graph,
+  session: string,
+  task: Bundle,
+  eid: string,
+  heard: boolean,
+): Bundle => ({
+  entity: { eid },
+  entry: { session },
+  system: {},
+  ...heard ? { heard: {} } : {},
+  $was: { entry: { session: token(null) } },
+  content: {
+    body:
+      `You still hold ${
+        human(g.vocab)(task)
+      }. If its requested work is complete, mark it done. ` +
+      'Otherwise keep working. If you cannot continue, comment on the task with what you finished, ' +
+      'what remains and the next step, then release its claim with claim_release. ' +
+      'If it is waiting on a dependency, record the dependency on the task.',
+  },
+})
+
+let handBack = async (
+  g: Graph,
+  report: Report,
+  session: string,
+  task: Bundle,
+  reply: Bundle,
+) => {
+  let id = task.entity.eid
+  let ask = String(comp(reply, 'output')?.source ?? reply.entity.eid)
+  let eid = derivedEid(`native-unfinished|${session}|${id}|${ask}`)
+  let [owner] = await g.get([session], ['filed', 'session'])
+  let by = comp(owner, 'filed')?.project ?? comp(owner, 'session')?.persona ??
+    comp(reply, 'created')?.by
+  let body = String(comp(reply, 'content')?.body ?? '')
+  await g.apply([
+    { ...guard(session, task), claim: null },
+    {
+      entity: { eid: derivedEid(`native-handoff|${eid}`) },
+      comment: { target: id },
+      doc: {
+        body:
+          `The harness released this claim after the session ended with the task open. See session ${session}, reply ${reply.entity.eid}.` +
+          (body
+            ? '\n\n' + body.split('\n').map((s) => `> ${s}`).join('\n')
+            : ''),
+      },
+      $actor: { ...by ? { by: String(by) } : {}, via: session },
+    },
+  ], { trusted: true })
+  await report?.(
+    new Error(
+      `Native session settled with unfinished claimed work: ${
+        String(comp(task, 'doc')?.title ?? id)
+      }`,
+    ),
+    {
+      eid,
+      during: { session, entity: id },
+      tags: { step: ask, condition: 'settled-unfinished' },
+    },
+  )
+}
+
+/** Ask once for each open claim, then hand it back if the session still ends
+ * with it. Pending tool results and working children can wake the session on
+ * their own. Completed, blocked and explicitly released work is left alone. */
+export let recoverSettled = (g: Graph, report?: Report) => {
+  let recover = async (session: string): Promise<boolean> => {
+    let tasks = await candidates(g, session)
+    if (!tasks.length) return false
+    if (
+      await workingChildren(g, session, true) ||
+      (await openOf(g, session)).length
+    ) return false
+    let [reply] = await g.read(
+      line`.entry.session=${session}&.output&.content&!result&!reasoning&!notice&!lines&.order=-entry.seq&.limit=1&.fields=entity.eid,output.source,content.body,created.by`,
+    )
+    if (!reply || await currentStatus(g, session) != 'settled') return false
+    let owed: [Bundle, string][] = []
+    let used: Bundle[] = []
+    for (let task of tasks) {
+      let eid = recovery(session, task)
+      let [sent] = await g.get([eid], ['entry'])
+      if (sent?.entry) used.push(task)
+      else owed.push([task, eid])
+    }
+    try {
+      if (owed.length) {
+        let heard = steered(await reach(g, session, { call: true }), undefined)
+        if (await currentStatus(g, session) != 'settled') return true
+        await g.apply(
+          owed.flatMap(([task, eid]) => [
+            guard(session, task),
+            reminder(g, session, task, eid, heard),
+          ]),
+          { trusted: true },
+        )
+        return true
+      }
+      for (let task of used) await handBack(g, report, session, task, reply)
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+      return await currentStatus(g, session) != 'settled' ||
+        await recover(session)
+    }
+    return false
+  }
+  return recover
 }

@@ -1,149 +1,208 @@
-// The unfinished-work report is derived from stored task dependencies, never an
-// agent's prose, and its hook can neither reorder nor change a step.
-import type { Host } from '@yaks/host'
-import type { Step } from '@yaks/session'
-import { equal, test } from '@yaks/testing'
-import { unfinishedEach, unfinishedNativeFinal } from './unfinished.ts'
+import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
+import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
+import { effectDoc, effects } from '@yaks/effects'
+import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { modelDoc } from '@yaks/model'
+import { processDoc } from '@yaks/process'
+import { projectDoc } from '@yaks/project/vocab'
+import { ram } from '@yaks/ram'
+import { answer, currentStatus, running } from '@yaks/session'
+import { sessionDoc, sessions, statusComputed } from '@yaks/session'
+import { equal, match, test } from '@yaks/testing'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { loadVocab } from '@yaks/vocab'
+import { docDoc } from '../doc/vocab.ts'
+import { healDoc } from '../heal/vocab.ts'
+import { provenanceDoc } from '../provenance/vocab.ts'
+import { taskDoc } from '../task/comp.ts'
+import { recoverSettled } from './unfinished.ts'
 
-let settled = (eid: string): Step => ({
-  did: 'asked',
-  status: 'settled',
-  added: [{ entity: { eid }, ask: {} }],
-})
-let ranStep: Step = { did: 'ran', status: 'pending', added: [] }
-let nothingStep: Step = { did: 'nothing', status: 'settled', added: [] }
+let session = 'worker'
+let task = 'work'
+let latest = 'Resume from the policy trace. The policy write still needs a fix.'
+let provider = identityEid('provider', ['scripted'])
+let model = identityEid('model', ['scripted'])
+let vocab = loadVocab([
+  kernelDoc,
+  docDoc,
+  taskDoc,
+  edgeDoc,
+  sessionDoc,
+  toolsDoc,
+  modelDoc,
+  processDoc,
+  projectDoc,
+  effectDoc,
+  healDoc,
+  provenanceDoc,
+], [kernelKeywords, edgeKeywords])
 
-// A native session holding one claimed task; `blocked` gives that task an
-// unfinished dependency, and `native: false` makes the session an outside one.
-let fake = (log: unknown[], blocked = false, native = true) =>
-  ({
-    graph: {
-      vocab: { comp: () => undefined },
-      read: (q: string) => {
-        log.push(q.includes('.native') ? 'checked' : q)
-        return Promise.resolve(
-          q.includes('.native')
-            ? native ? [{ entity: { eid: 's' }, native: {} }] : []
-            : q.includes('.claim.session')
-            ? [{ entity: { eid: 'task' }, doc: { title: 'Unfinished' } }]
-            : blocked
-            ? [{ entity: { eid: 'dependency' } }]
-            : [],
-        )
-      },
-    },
-    report: (error: unknown) => {
-      log.push((error as Error).message)
-    },
-  }) as unknown as Host
-
-test('the unfinished hook awaits the step callback first and skips nothing steps', async () => {
-  let log: unknown[] = []
-  let each = unfinishedEach(fake(log, false, false), async (step, session) => {
-    await Promise.resolve()
-    log.push(`${session}:${step.did}`)
+let fixture = async (mode: string) => {
+  let fx = effects(vocab, { owner: 'runner' })
+  let g = graph({
+    vocab,
+    storage: ram(vocab, { computed: statusComputed }),
+    plugins: [kernel(), sessions(), fx],
   })
-  await each(settled('ask'), 's')
-  await each(nothingStep, 's')
-  equal(log, [
-    's:asked',
-    'checked',
-    's:nothing',
-  ])
-})
-
-test('a failed unfinished check is reported and cannot change a step', async () => {
-  let failure = new Error('graph unavailable')
-  let failures: unknown[] = []
-  let each = unfinishedEach({
-    graph: { read: () => Promise.reject(failure) },
-    report: (error: unknown) => void failures.push(error),
-  } as unknown as Host)
-  let step = settled('ask')
-  await each(step, 's')
-  await each(ranStep, 's')
-  equal(failures, [failure])
-  equal(step, settled('ask'))
-})
-
-test('settled native work is reported but unfinished dependencies are left waiting', async () => {
-  let open: unknown[] = []
-  let waiting: unknown[] = []
-  await unfinishedNativeFinal(fake(open), 's', settled('ask'))
-  await unfinishedNativeFinal(fake(waiting, true), 's', settled('ask2'))
-  equal(
-    open.at(-1),
-    'Native session settled with unfinished claimed work: Unfinished',
-  )
-  equal(waiting.some((l) => String(l).startsWith('Native')), false)
-  equal(open.some((q) => String(q).includes('!blocked')), true)
-})
-
-// A quiet fixer remains heal's work between tracker reconciliation passes.
-const healReports: string[] = []
-let healOwns = true
-let mutedHeal = false
-const healHost = {
-  graph: {
-    vocab: { comp: (name: string) => name == 'fixer' ? {} : undefined },
-    get: () =>
-      Promise.resolve([{ entity: { eid: 's' }, fixer: { bug: 'bug' } }]),
-    read: (q: string) =>
-      Promise.resolve(
-        q.includes('.native')
-          ? [{ entity: { eid: 's' } }]
-          : q.includes('.claim.session')
-          ? [{ entity: { eid: 'task' }, doc: { title: 'Unfinished' } }]
-          : q.includes('.nofix')
-          ? mutedHeal ? [{ entity: { eid: 'project' } }] : []
-          : q.includes('.about')
-          ? healOwns ? [{ entity: { eid: 'ownership' } }] : []
-          : [],
-      ),
-  },
-  report: (error: unknown) => {
-    healReports.push((error as Error).message)
-  },
-} as unknown as Host
-await unfinishedNativeFinal(healHost, 's', settled('heal-owned'))
-const whileOwned = healReports.length
-healOwns = false
-await unfinishedNativeFinal(healHost, 's', settled('unowned'))
-const withoutOwnership = healReports.length
-healOwns = true
-mutedHeal = true
-await unfinishedNativeFinal(healHost, 's', settled('muted'))
-test('a heal-owned fixer waits for its follower, while unowned or muted work reports', () => {
-  equal(whileOwned, 0)
-  equal(withoutOwnership, 1)
-  equal(healReports.length, 2)
-})
-
-// A session a comment started answers that comment; its claim on the task
-// keeps the next comment coming to it, and is no unfinished work once it replied.
-let started = (replied: boolean) => {
   let reports: string[] = []
-  let read = (q: string) =>
-    Promise.resolve(
-      q.includes('.native')
-        ? [{ entity: { eid: 's' }, session: { source: 'c' } }]
-        : q.includes('.entity.eid=c')
-        ? [{ entity: { eid: 'c' }, comment: { target: 'task' } }]
-        : q.includes('.claim.session')
-        ? [{ entity: { eid: 'task' }, doc: { title: 'Asked' } }]
-        : q.includes('.comment.target=task&.created.via=s') && replied
-        ? [{ entity: { eid: 'reply' } }]
-        : [],
+  let asks = 0
+  let writes: Bundle[] = [
+    { entity: { eid: 'runner' }, process: {} },
+    { entity: { eid: provider }, provider: { name: 'scripted' } },
+    { entity: { eid: model }, model: { name: 'scripted' } },
+    {
+      entity: { eid: session },
+      session: {
+        id: session,
+        ...mode.startsWith('comment') ? { source: 'question' } : {},
+      },
+      ...mode == 'outside' ? {} : { native: {} },
+    },
+    {
+      entity: { eid: task },
+      task: {},
+      doc: { title: 'Policy trace' },
+      claim: { session },
+      ...mode == 'blocked' ? { blocked: { on: 'external approval' } } : {},
+    },
+    {
+      entity: { eid: 'go' },
+      entry: { session },
+      content: { body: 'Fix the policy write' },
+      using: { provider, model },
+    },
+  ]
+  if (mode == 'comment' || mode == 'comment-unanswered') {
+    writes.push({
+      entity: { eid: 'question' },
+      comment: { target: task },
+      doc: { body: 'What happened?' },
+    })
+  }
+  if (mode == 'dependency') {
+    writes.push({
+      entity: { eid: 'dep' },
+      task: {},
+      blocked: { on: 'external approval' },
+    }, link(task, 'requires', 'dep'))
+  }
+  if (mode == 'delegated') {
+    writes.push({
+      entity: { eid: 'child' },
+      session: { id: 'child' },
+      native: {},
+      spawned: { parent: session },
+      dispatch: { state: 'active' },
+    })
+  }
+  if (mode == 'heal' || mode == 'muted-heal') {
+    writes.push(
+      { entity: { eid: 'bug' }, doc: { title: 'Fixture bug' } },
+      { entity: { eid: session }, fixer: { bug: 'bug' } },
+      { entity: { eid: task }, filed: { project: 'project' } },
+      {
+        entity: { eid: 'project' },
+        project: {},
+        ...mode == 'muted-heal' ? { nofix: {} } : {},
+      },
+      link(task, 'about', 'bug'),
     )
-  let host = {
-    graph: { vocab: { comp: () => undefined }, read },
-    report: (error: unknown) => void reports.push((error as Error).message),
-  } as unknown as Host
-  return unfinishedNativeFinal(host, 's', settled('a')).then(() => reports)
+  }
+  await g.apply(writes, { trusted: true })
+  let runner = {
+    holder: 'runner',
+    tools: [],
+    recoverSettled: recoverSettled(
+      g,
+      (error) => void reports.push(String(error)),
+    ),
+    model: async () => {
+      asks++
+      if (asks == 1 && mode == 'comment') {
+        await g.apply([{
+          entity: { eid: 'reply' },
+          comment: { target: task },
+          doc: { body: 'The policy trace is on the task.' },
+          $actor: { via: session },
+        }], { trusted: true })
+      }
+      if (asks == 2 && (mode == 'complete' || mode == 'release')) {
+        await g.apply(
+          mode == 'complete'
+            ? [{ entity: { eid: task }, completed: {} }]
+            : [{ entity: { eid: task }, claim: null }, {
+              entity: { eid: 'handoff' },
+              comment: { target: task },
+              doc: { body: latest },
+            }],
+          { trusted: true },
+        )
+      }
+      return {
+        id: `reply-${asks}`,
+        model: 'scripted',
+        items: [{ kind: 'assistant' as const, text: latest }],
+      }
+    },
+  }
+  fx.handle(running(g, runner))
+  return {
+    run: async () => {
+      await answer(g, session, runner)
+      await fx.work(g)
+      await fx.idle()
+      equal(await g.read('.effect.error'), [])
+      let [work] = await g.get([task])
+      let comments = await g.read(
+        '.comment.target=work&.entity.eid!=question&.fields=doc.body',
+      )
+      equal(await currentStatus(g, session), 'settled')
+      return { work, comments, reports, asks }
+    },
+  }
 }
-test('a comment-started session that answered its comment settles unreported', async () => {
-  equal(await started(true), [])
-  equal(await started(false), [
-    'Native session settled with unfinished claimed work: Asked',
-  ])
-})
+
+for (
+  let mode of [
+    'complete',
+    'release',
+    'unfinished',
+    'comment-unanswered',
+    'muted-heal',
+  ]
+) {
+  let f = await fixture(mode)
+  test(`native work can ${mode} after one recovery turn`, async () => {
+    let { work, comments, reports, asks } = await f.run()
+    equal(asks, 2)
+    equal(work.claim, undefined)
+    equal(!!work.completed, mode == 'complete')
+    equal(reports.length, ['complete', 'release'].includes(mode) ? 0 : 1)
+    if (mode != 'complete') {
+      equal(comments.length, 1)
+      match(
+        String((comments[0].doc as Comp).body),
+        /policy write still needs a fix/,
+      )
+    }
+  })
+}
+
+for (
+  let mode of [
+    'blocked',
+    'dependency',
+    'outside',
+    'comment',
+    'delegated',
+    'heal',
+  ]
+) {
+  let f = await fixture(mode)
+  test(`a resting ${mode} session keeps its claim without recovery`, async () => {
+    let { work, reports, asks } = await f.run()
+    equal(asks, 1)
+    equal((work.claim as Comp).session, session)
+    equal(reports, [])
+  })
+}
