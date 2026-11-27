@@ -662,7 +662,8 @@ queue = "yak-errors"
 APEX = "yaks.fyi"
 CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
 # The yaks.fyi zone, whose fallback origin is origin.saas.yaks.fyi; a person's
-# domain attaches here once CF_HOSTNAMES_TOKEN is set for staging.
+# domain attaches here with staging's CF_HOSTNAMES_TOKEN (the account token
+# `yak-staging hostnames`, also in 1Password under that title).
 CF_ZONE = "2f826236835325343b260ac21e6fb2b7"
 WORKER_NAME = "yak-staging"
 DISPATCH_NAMESPACE = "yak-apps-staging"

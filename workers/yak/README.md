@@ -533,9 +533,10 @@ secret:
 The zone needs proxied `AAAA @ → 100::` and `AAAA * → 100::` records. Onboard
 `yaks.fyi` for Email Sending and Email Routing with Cloudflare’s issued mail DNS
 records; route its catch-all to `yak-staging`. Custom domains attach through the
-`origin.saas.yaks.fyi` fallback origin and the `*/*` route on that zone once
-staging's `CF_HOSTNAMES_TOKEN` is set (SSL and Certificates Edit on `yaks.fyi`
-alone). Observability is on; staging has no tail consumer.
+`origin.saas.yaks.fyi` fallback origin and the `*/*` route on that zone with
+staging's `CF_HOSTNAMES_TOKEN`: the account token `yak-staging hostnames`, SSL
+and Certificates Edit on `yaks.fyi` alone, kept in 1Password under the same
+title. Observability is on; staging has no tail consumer.
 
 ## Migration passes: expand, then contract
 
