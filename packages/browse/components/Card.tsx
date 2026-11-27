@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { type Signal, useComputed, useSignal } from '@preact/signals'
+import { useDerived } from './read.ts'
 import { useEffect, useRef, useState } from 'react'
 import { camera, ent, mutate, pinZ, toFront } from '../live.ts'
 import { type Pinned } from '../types.ts'
@@ -74,12 +74,13 @@ let Frame = ui.block('section', 'Window', {
 })
 let { Tabs, Min, X, Scroll } = Frame
 
-export let pinStyle = (live: Signal<Pinned>) => {
-  let p = live.value
-  return `left:${p.x}px;top:${p.y}px;z-index:${pinZ(p.eid, p.z).value};` +
-    (p.w ? `width:${p.w}px;` : '') +
-    (p.h ? `height:${p.h}px;` : '')
-}
+export let pinStyle = (p: Pinned) => ({
+  left: `${p.x}px`,
+  top: `${p.y}px`,
+  zIndex: pinZ(p.eid, p.z).value,
+  width: p.w ? `${p.w}px` : undefined,
+  height: p.h ? `${p.h}px` : undefined,
+})
 
 // A card: one entity through one chosen view, framed by a tab per view that
 // applies. Everything renders from the cache, so a tab click is just a card
@@ -124,12 +125,7 @@ export let Card = (
     observer.observe(frame.current)
     return () => observer.disconnect()
   }, [])
-  // Plain props do not invalidate a computed signal. Mirror the latest pin
-  // into one so moves update the style while z-only raises still bind
-  // straight to the attribute without rerendering the card body.
-  let live = useSignal(p)
-  live.value = p
-  let style = useComputed(() => docked ? '' : pinStyle(live))
+  let style = useDerived(() => docked ? undefined : pinStyle(p), [docked, p])
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!(e.target instanceof Element)) return
     if (docked) return

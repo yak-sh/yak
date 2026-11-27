@@ -25,16 +25,20 @@ test('card style follows moved coordinates without a z change', () => {
     },
   }
   let live = signal(pin(10, 20, 1))
-  let style = computed(() => pinStyle(live))
+  let style = computed(() => pinStyle(live.value))
 
-  assertEquals(style.value, 'left:10px;top:20px;z-index:1;')
+  let position = () => {
+    let { left, top, zIndex } = style.value
+    return [left, top, zIndex]
+  }
+  assertEquals(position(), ['10px', '20px', 1])
   live.value = pin(30, 40, 1)
-  assertEquals(style.value, 'left:30px;top:40px;z-index:1;')
+  assertEquals(position(), ['30px', '40px', 1])
 
   applyLocal([{
     eid: 'card-style',
     name: 'pin',
     comp: { z: 2 },
   }])
-  assertEquals(style.value, 'left:30px;top:40px;z-index:2;')
+  assertEquals(position(), ['30px', '40px', 2])
 })

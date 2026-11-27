@@ -15,7 +15,13 @@ export { type VisualRow, visualRows, visualSpot } from './textRows.ts'
 import { useTextSurface } from './visual.ts'
 import { createElement as h, type JSX, useRef, useState } from 'react'
 import type { Key } from './input.ts'
-import { size, terminalFocused, useKeys, useMetric } from './screen.ts'
+import {
+  size,
+  terminalFocused,
+  useKeys,
+  useMetric,
+  useScreen,
+} from './screen.ts'
 
 /** The editor's whole state: the text, and where the cursor sits in it. */
 export type Edit = { text: string; at: number }
@@ -176,7 +182,9 @@ export let Textarea = (
     onEdit?.(next)
     if (next.text != was.text) onChange?.(next.text)
   }
-  let columns = useMetric(id, 'width') || size.value.columns
+  let screen = useScreen(size)
+  let focused = useScreen(terminalFocused)
+  let columns = useMetric(id, 'width') || screen.columns
   let hint = prompt.slice(0, Math.max(0, columns - 1))
   let width = Math.max(1, columns - hint.length)
   useKeys((k) => {
@@ -198,7 +206,7 @@ export let Textarea = (
   let rows = visualRows(s.text, width)
   let lines = rows.map((r) => s.text.slice(r.start, r.end))
   let { row, col } = visualSpot(rows, s.at)
-  let height = Math.max(1, Math.min(lines.length, max, size.value.rows))
+  let height = Math.max(1, Math.min(lines.length, max, screen.rows))
   let top = Math.min(
     Math.max(0, row - height + 1),
     Math.max(0, lines.length - height),
@@ -213,7 +221,7 @@ export let Textarea = (
         'div',
         { key: i },
         gutter(i),
-        active && terminalFocused.value && i == row
+        active && focused && i == row
           ? [
             h('span', {}, line.slice(0, col)),
             h('span', { className: 'Cursor' }, line[col] ?? ' '),

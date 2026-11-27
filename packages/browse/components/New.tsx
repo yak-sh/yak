@@ -9,7 +9,7 @@
 // drives the same page.
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import * as ui from '@yaks/ui'
-import { label, pickLine, reading, useHits } from '@yaks/ux'
+import { label, pickLine, reading, useDraft, useHits } from '@yaks/ux'
 import { drafts } from '@yaks/draft/input'
 import type { Bundle } from '@yaks/graph'
 import {
@@ -124,7 +124,7 @@ let Find = (
   { place, hint, first }: { place: string; hint: string; first: () => void },
 ) => (
   <ui.Field
-    value={drafts.text(place)}
+    value={useDraft(place, drafts)}
     placeholder={hint}
     onInput={(ev: InputEvent) =>
       drafts.type(place, (ev.currentTarget as HTMLInputElement).value)}
@@ -146,7 +146,7 @@ let Ref = (
     set: (text: string) => void
   },
 ) => {
-  let q = drafts.text(place)
+  let q = useDraft(place, drafts)
   let hits = useHits(
     pickLine(q, kind == 'entity' ? '' : kind),
     6,
@@ -303,7 +303,8 @@ let Add = (
   { s, place, put }: { s: Sketch; place: string; put: (s: Sketch) => void },
 ) => {
   let at = `${place}|find`
-  let hits = find(vocab, drafts.text(at), Object.keys(s.comps))
+  let text = useDraft(at, drafts)
+  let hits = find(vocab, text, Object.keys(s.comps))
   let add = (name?: string) => {
     if (!name) return
     put({ ...s, comps: { ...s.comps, [name]: {} } })
@@ -316,7 +317,7 @@ let Add = (
         hint='add a component: type to search the vocabulary'
         first={() => add(hits[0]?.name)}
       />
-      {drafts.text(at).trim() && (
+      {text.trim() && (
         <ui.Choices>
           {hits.map((h) => (
             <Item key={h.name} {...pickable(() => add(h.name))}>
@@ -414,7 +415,7 @@ export let New = ({ at }: { at: At }) => {
   let where: At = { in: inEid, like: at.like ? likeEid : undefined }
   let place = placeOf(where)
   let seed = likeEid ? like(vocab, ent(likeEid)) : { comps: {}, outline: '' }
-  let s = sketchOf(drafts.text(place)) ?? seed
+  let s = sketchOf(useDraft(place, drafts)) ?? seed
   let put = (next: Sketch) => {
     setRefused(undefined)
     drafts.type(place, textOf(next))

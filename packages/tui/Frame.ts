@@ -14,7 +14,7 @@ import {
   type JSX,
   type ReactNode,
 } from 'react'
-import { size } from './screen.ts'
+import { size, useScreen } from './screen.ts'
 import { Scroll } from './Scroll.ts'
 
 /** One sidebar panel: a heading and whatever draws under it. */
@@ -45,7 +45,7 @@ export let Frame = (
   if (ratio != null && (!Number.isFinite(ratio) || ratio < 0 || ratio > 1)) {
     throw new RangeError('Frame ratio must be between 0 and 1')
   }
-  let columns = size.value.columns
+  let columns = useScreen(size).columns
   let sidebarWidth = ratio == null ? width : Math.min(
     Math.max(width, Math.floor(columns * ratio)),
     Math.max(0, columns - 1),

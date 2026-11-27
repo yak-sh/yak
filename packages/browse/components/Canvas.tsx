@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
-import { useLayoutEffect, useRef } from 'react'
-import { effect, useSignal } from '@preact/signals'
+import { useLayoutEffect, useMemo, useRef } from 'react'
+import { effect, signal } from '@preact/signals-core'
 import {
   cache,
   camera,
@@ -91,7 +91,7 @@ export let spawnHit = (canvas: string, target: string) => {
 // socket as pans, zooms, and resizes settle. x/y is the viewport center in
 // plane coords: translate = viewport/2 - center * zoom.
 export let Canvas = ({ eid }: { eid: string }) => {
-  usePinned(eid)
+  let cards = usePinned(eid)
   let el = useRef<HTMLDivElement>(null)
   let plane = useRef<HTMLDivElement>(null)
   let mouse = useRef<{ x: number; y: number } | null>(null) // paste lands here
@@ -107,7 +107,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
       sign: number // direction of the dominant axis
     } | null
   >(null)
-  let glide = useSignal(false) // one smooth transition, for zoom-to-card
+  let glide = useMemo(() => signal(false), []) // one smooth transition, for zoom-to-card
 
   // The latched card: <space> doesn't just frame a card, it follows it —
   // when the pin changes shape (a tab switch, an edit growing the body),
@@ -341,7 +341,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
 
   // Camera motion owns two DOM attributes, not the card tree. The signal
   // effect runs before paint and updates those attributes without asking
-  // Preact to reconcile any mounted card or board.
+  // the renderer to reconcile any mounted card or board.
   useLayoutEffect(() =>
     effect(() => {
       if (!el.current || !plane.current) return
@@ -618,7 +618,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
       }}
     >
       <Plane elRef={plane}>
-        {pinned(eid).map((p) => <Card key={p.eid} p={p} />)}
+        {cards.map((p) => <Card key={p.eid} p={p} />)}
       </Plane>
     </Frame>
   )

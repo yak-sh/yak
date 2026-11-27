@@ -4,22 +4,27 @@ import '../testing.ts'
 import { h } from 'preact'
 import { type Bundle, Disclosure, disclosureAt } from '@yaks/ux'
 import { parse } from '@yaks/query'
-import { cache, clearResolved, type Comps } from '../live.ts'
+import { cache, clearResolved, type Comps, ent } from '../live.ts'
 import { host } from '../host_testing.ts'
-import { inspectIo } from './inspect.tsx'
+import { adaptViews, inspectIo } from './inspect.tsx'
 import { extend } from './registry.ts'
 import { Page } from './App.tsx'
 import { mount } from './mount.ts'
 
 test("a view's own page state, set through the inspector's io, redraws it", async () => {
   let eid = disclosureAt('inspect-test')
-  let View = () =>
-    h(Disclosure, {
-      e: inspectIo.state(eid) ?? { entity: { eid } },
-      onChange: (b: Bundle) => inspectIo.set([b]),
-      summary: 'more',
-    }, 'the rest')
-  let mounted = mount(h(View, {}))
+  let [view] = adaptViews([{
+    view: 'Disclosure',
+    match: parse('.entity'),
+    Render: ({ io }) =>
+      h(Disclosure, {
+        e: io.state(eid) ?? { entity: { eid } },
+        onChange: (b: Bundle) => io.set([b]),
+        summary: 'more',
+      }, 'the rest'),
+  }])
+  if (!('Render' in view)) throw Error('Missing inspector view')
+  let mounted = mount(h(view.Render, { e: ent(eid) }))
   try {
     ;(mounted.root.querySelector('summary') as HTMLElement).click()
     await until(() => !!mounted.root.querySelector('details[open]'), {

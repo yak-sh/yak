@@ -4,7 +4,9 @@
 // this is only the app's host adapter, not a second inspector or registry.
 import { createElement as h, type ReactNode, useMemo } from 'react'
 import { define, prepared, resolve } from '@yaks/render'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
+import { useObserved } from '@yaks/ux'
+import { useDerived } from './read.ts'
 import { parse } from '@yaks/query'
 import { all, Past, schemaPages } from '@yaks/inspect'
 import { inspectViews as memoryViews } from '@yaks/memory/views'
@@ -127,12 +129,13 @@ let useAnswers = (asks: Asks): Record<string, Answer> => {
     [key],
   )
   useHold(...plans.map(([, p]) => hold(p)))
-  return Object.fromEntries(plans.map(([name, p]) => [name, answer(p)]))
+  return useDerived(
+    () => Object.fromEntries(plans.map(([name, p]) => [name, answer(p)])),
+    [plans],
+  )
 }
 
-// Inspector state is in the page graph; reading it during a render wakes
-// that render when an inspector control or history pager changes it, or a
-// view sets state of its own there (a @yaks/ux Disclosure's).
+// Updates to the inspector's page graph wake the views mounted over it.
 let turn = signal(0)
 front.watch('.inspector|.table|.Disclosure').subscribe(() => turn.value++)
 
@@ -153,7 +156,7 @@ export let inspectIo: Io = {
   kind: kindOf,
   name: named,
   when: ago,
-  state: (eid) => (turn.value, front.ent(eid)),
+  state: front.ent,
   set: (bs) => {
     void Promise.resolve(front.mutate(bs)).then(() => turn.value++)
   },
@@ -173,6 +176,7 @@ export let adaptViews = (views: import('@yaks/inspect').View[]): Entry[] =>
     .map((r) => ({
       ...r,
       Render: ({ e, ...ctx }) => {
+        useObserved(turn)
         let b = bundle(e)
         let got = useAnswers(r.asks?.(b, inspectIo, ctx) ?? {})
         return h(r.Render, { e: b, io: inspectIo, ctx, got })
@@ -314,6 +318,9 @@ export let Waiting = (
     children: (n: number) => ReactNode
   },
 ) => {
-  let n = offer.waiting?.(bundle(ent(eid)), inspectIo)
+  let n = useDerived(() => offer.waiting?.(bundle(ent(eid)), inspectIo), [
+    offer,
+    eid,
+  ])
   return n ? <>{children(n)}</> : null
 }
