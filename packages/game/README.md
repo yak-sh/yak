@@ -108,8 +108,9 @@ the foe's guard and `blow` sets the damage. Each hit is a `play_hit` row, and
 `hpOf` sums a target's hits on its current life, so health is never stored and a
 revive is a new life. When the last standing player ends a turn, every foe walks
 toward the nearest player and strikes back. The store pushes the new turn,
-positions and hits to each page, whose `Party` panel shows every player's and
-foe's health.
+positions and hits to each page. `room-party.ts` paints the `Party` panel of
+every player's and standing foe's health bar into `#party` from the room's
+watch; `connectRoom` starts it, so a page that is rewritten keeps it.
 
 ## Paths
 

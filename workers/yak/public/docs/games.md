@@ -92,13 +92,13 @@ batch per accepted action.
 
 The app worker checks each guest invitation and writes a turn batch only when
 the rules accept the action. The multiplayer starter already has a party panel
-with every player's health bar (`Party` from `@yaks/game/hud`), foes that walk
-up and strike back, knock-out and revive, and moving by tapping where to go:
-build the game's fights on them, and never add arrow buttons. Health is a
-ledger: `play_hit{target, life, dmg, roll, need}` rows summed by `hpOf`, and a
-revive starts a new `play_pawn{life}`. `play_motion{room, seat, x, z}` is a
-transient aim marker. Use peer components for frequent motion, with an
-appropriate `pace`.
+with every player's health bar, foes that walk up and strike back, knock-out and
+revive, and moving by tapping where to go: build the game's fights on them, and
+never add arrow buttons. `room-party.ts` paints the panel into `#party` on its
+own; keep it, and leave `#party` out of a page you rewrite. Health is a ledger:
+`play_hit{target, life, dmg, roll, need}` rows summed by `hpOf`, and a revive
+starts a new `play_pawn{life}`. `play_motion{room, seat, x, z}` is a transient
+aim marker. Use peer components for frequent motion, with an appropriate `pace`.
 
 Keep the watch returned by `connectRoom` in `room-client.ts` as the source of
 room state. It delivers the initial snapshot, accepted turns and a fresh

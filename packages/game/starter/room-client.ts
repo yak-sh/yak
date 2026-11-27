@@ -1,5 +1,6 @@
 import { page, type PageOptions } from '@yaks/game/page'
 import { roomLine, roomPath, type Seat } from './room-model.ts'
+import { partyPanel } from './room-party.ts'
 
 export type Joined = Seat & { host: boolean; invite?: string }
 
@@ -22,15 +23,18 @@ export let postRoom = async <T>(path: string, data?: unknown): Promise<T> => {
 }
 
 // Both initial state and later updates use this watch. The sync client keeps
-// its query and resubscribes whenever this room's socket reconnects.
+// its query and resubscribes whenever this room's socket reconnects. The
+// party panel (room-party.ts) paints from it until the front closes.
 export let connectRoom = async (
-  { room }: Seat,
+  seat: Seat,
   options: PageOptions = {},
 ) => {
   let front = await page({
-    api: new URL(roomPath(room), document.baseURI),
+    api: new URL(roomPath(seat.room), document.baseURI),
     page: false,
     ...options,
   })
-  return { front, watch: front.watch(roomLine(room)) }
+  let watch = front.watch(roomLine(seat.room))
+  partyPanel(watch, seat)
+  return { front, watch }
 }

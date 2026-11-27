@@ -1,6 +1,7 @@
 import { client } from '@yaks/client'
 import { equal, ok, test, throws } from '@yaks/testing'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'
 import {
   type Choice,
@@ -17,6 +18,7 @@ import {
   HERO,
   REACH,
 } from './starter/room-rules.ts'
+import { partyPanel } from './starter/room-party.ts'
 import { roomFrames } from './starter/room-wire.ts'
 import { rooms } from './starter/worker.ts'
 import words from './starter/vocab.json' with { type: 'json' }
@@ -273,4 +275,55 @@ test('a knocked-out hero loses their turns until an ally beside them revives the
   let last = play(fallen, ['a'], { kind: 'pass' }, [0.99, 0])
   equal(last.party[0].hp, 0)
   await refused(() => play(last.rows, ['a'], { kind: 'pass' }))
+})
+
+test('the party panel paints a health bar for each player and standing foe, with no page code', () => {
+  let { document } = parseHTML(
+    '<html><head></head><body><div class="GameScreen_Hud"></div></body></html>',
+  )
+  let changed = () => {}
+  let room = {
+    value: rows([['a', 0, 0], ['b', 0, 2]], [['w', 'wolf', 1, 0], [
+      'd',
+      'wolf',
+      5,
+      5,
+    ]], [['d', FOES.wolf.most]]),
+    ready: false,
+    subscribe: (fn: () => void) => {
+      changed = fn
+      return () => {}
+    },
+  }
+  let global = globalThis as { document?: Document }
+  global.document = document
+  try {
+    partyPanel(room, { room: R, seat: 'b' }, document)
+    let panel = document.querySelector<HTMLElement>('.GameScreen_Hud > #party')!
+    ok(panel.hidden)
+    room.ready = true
+    room.value = play(room.value, ['a', 'b'], { kind: 'strike', foe: 'w' }, [
+      0.99,
+      0,
+    ]).rows
+    changed()
+    ok(!panel.hidden)
+    equal(
+      [...panel.querySelectorAll('.Party_Member')].map((m) =>
+        [
+          m.className.replace(/\bParty_Member\b ?/, ''),
+          m.querySelector('.Party_Name')!.textContent,
+          !!m.querySelector('.Meter'),
+          m.querySelector('.Party_Hp')!.textContent,
+        ].join(' ')
+      ),
+      [
+        ' a true 10/10',
+        'Party_Member-turn Party_Member-own b true 10/10',
+        ' Wolf true 3/6',
+      ],
+    )
+  } finally {
+    delete global.document
+  }
 })

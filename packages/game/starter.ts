@@ -21,6 +21,7 @@ let room = [
   'room-page.ts',
   'room-client.ts',
   'room-model.ts',
+  'room-party.ts',
   'room-rules.ts',
   'room-wire.ts',
   'vocab.json',

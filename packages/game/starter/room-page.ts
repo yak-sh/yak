@@ -1,8 +1,4 @@
 import { friendsAt } from '@yaks/game/friends'
-import { kit, Party } from '@yaks/game/hud'
-import { themes } from '@yaks/ui/ui'
-import { wear } from '@yaks/ui/wear'
-import { h, render as paint } from 'preact'
 import { frames } from './frames.ts'
 import {
   connectRoom,
@@ -16,10 +12,8 @@ import { roomView } from './room-view.ts'
 import { screen } from './screen.ts'
 
 let disposeScreen = screen()
-void wear({ kits: { hud: kit }, theme: themes.everforest }).catch(reportError)
 let canvas = document.querySelector('canvas')!
 let status = document.querySelector<HTMLElement>('#room-status')!
-let panel = document.querySelector<HTMLElement>('#party')!
 let log = document.querySelector<HTMLElement>('#log')!
 let host = document.querySelector<HTMLButtonElement>('#host')!
 let share = document.querySelector<HTMLButtonElement>('#share')!
@@ -85,21 +79,6 @@ let playRoom = async (member: Joined) => {
     let living = foes.filter((f) => f.hp > 0)
     let mine = turn?.seat === seat && !!me && me.hp > 0
     actions.disabled = !watch.ready || !mine
-    panel.hidden = !watch.ready
-    paint(
-      [
-        h(Party, {
-          members: party.map((p) => ({
-            ...p,
-            turn: p.eid === turn?.seat,
-            own: p.eid === seat,
-          })),
-        }),
-        living.length > 0 &&
-        h(Party, { label: 'Foes', members: living }),
-      ],
-      panel,
-    )
     log.replaceChildren(
       ...hits.slice(-3).reverse().map((hit) => {
         let line = document.createElement('li')
