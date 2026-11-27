@@ -8,7 +8,7 @@
 // reader can show "not settled yet" the same way, with the `note` line the
 // step left for the person looking.
 
-import type { VocabDoc } from '@yaks/vocab'
+import { pick, type VocabDoc } from '@yaks/vocab/runtime'
 import { effectDoc } from './docs.ts'
 
 /** The mark's component, by the name ./vocab.json declares it. */
@@ -19,7 +19,8 @@ export let PROVISIONAL = 'provisional'
  * rows: `loadVocab([provisionalDoc, ...mine])`. {@link effectDoc} carries it
  * too, so a host loads one or the other, never both.
  */
-export let provisionalDoc: VocabDoc = {
-  title: PROVISIONAL,
-  $defs: { [PROVISIONAL]: effectDoc.$defs![PROVISIONAL] },
-}
+export let provisionalDoc: VocabDoc = pick(
+  effectDoc,
+  [PROVISIONAL],
+  PROVISIONAL,
+)

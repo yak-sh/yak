@@ -1,0 +1,102 @@
+{
+  "$defs": {
+    "connectionsPage": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "on": {
+          "type": "boolean"
+        },
+        "list": {
+          "type": "array"
+        },
+        "borrowed": {
+          "type": "array"
+        },
+        "services": {
+          "type": "array"
+        },
+        "built": {
+          "type": "array"
+        },
+        "mcp": {
+          "type": "object"
+        },
+        "catalog": {
+          "type": "object"
+        },
+        "asked": {
+          "type": "object"
+        },
+        "open": {
+          "type": "string"
+        },
+        "trash": {
+          "type": "array"
+        },
+        "enable": {
+          "type": "array"
+        },
+        "plan": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "space",
+        "ask"
+      ]
+    },
+    "connectionAct": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "form": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "space",
+        "form"
+      ]
+    },
+    "connectionsMoved": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "connectionActed": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "say": {
+          "type": "string"
+        },
+        "no": {
+          "type": "boolean"
+        },
+        "go": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

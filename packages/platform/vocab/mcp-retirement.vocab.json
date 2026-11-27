@@ -1,0 +1,61 @@
+{
+  "reserved": false,
+  "$defs": {
+    "mcp_retirement": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "description": "MCP credential erasure and the notices it owes.",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "stamped": true
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "stamped": true
+        },
+        "notices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "to": {
+                "type": "string"
+              },
+              "about": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              }
+            }
+          },
+          "stamped": true
+        }
+      }
+    },
+    "erase_mcp_credentials": {
+      "effect": true,
+      "created": [
+        "mcp_retirement"
+      ],
+      "description": "Erase retired MCP secrets and send the notices they owe."
+    },
+    "collect_mcp_orphans": {
+      "effect": true,
+      "start": true,
+      "description": "Collect orphaned MCP credentials from earlier erasures."
+    }
+  }
+}

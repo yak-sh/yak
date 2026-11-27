@@ -26,7 +26,8 @@
  */
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import type { PropSchema, VocabDoc } from '@yaks/vocab'
+import type { VocabDoc } from '@yaks/vocab'
+import dashboardJson from './vocab/dashboard.vocab.json' with { type: 'json' }
 
 let WORK = '.agentWork.space='
 let FIXES = '.operatorFix.space='
@@ -54,57 +55,7 @@ export let suggestions = (eid: string): string => SUGGESTIONS + eid
 export let suggestedSpace = (line: string): string | undefined =>
   line.startsWith(SUGGESTIONS) ? line.slice(SUGGESTIONS.length) : undefined
 
-let str = { type: 'string' }
-let int = { type: 'integer' }
-let bool = { type: 'boolean' }
-let row = (properties: Record<string, PropSchema>, required: string[]) => ({
-  component: true,
-  type: 'object',
-  properties,
-  required,
-})
-
-export let dashboardWords: VocabDoc = {
-  $defs: {
-    agentWork: row(
-      {
-        space: str,
-        app: str,
-        version: int,
-        at: str,
-        by: str,
-        name: str,
-        operator: bool,
-      },
-      ['space', 'app', 'at', 'by', 'name'],
-    ),
-    operatorFix: row(
-      {
-        space: str,
-        request: str,
-        app: str,
-        at: str,
-        said: str,
-        failed: bool,
-        working: bool,
-        asked: str,
-      },
-      ['space', 'request', 'at'],
-    ),
-    suggestion: row(
-      {
-        space: str,
-        rank: int,
-        name: str,
-        says: str,
-        ask: str,
-        app: str,
-      },
-      ['space', 'rank', 'name', 'says', 'ask'],
-    ),
-    dismissSuggestion: row({ space: str, name: str }, ['space', 'name']),
-  },
-}
+export let dashboardWords: VocabDoc = dashboardJson as VocabDoc
 
 // A property the row has no word on is left out, as the graph keeps it.
 let drop = <T extends Record<string, unknown>>(o: T): T =>

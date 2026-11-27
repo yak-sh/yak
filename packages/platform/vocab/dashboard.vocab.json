@@ -1,0 +1,120 @@
+{
+  "$defs": {
+    "agentWork": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "at": {
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "space",
+        "app",
+        "at",
+        "by",
+        "name"
+      ]
+    },
+    "operatorFix": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "request": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        },
+        "failed": {
+          "type": "boolean"
+        },
+        "working": {
+          "type": "boolean"
+        },
+        "asked": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "request",
+        "at"
+      ]
+    },
+    "suggestion": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "says": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "rank",
+        "name",
+        "says",
+        "ask"
+      ]
+    },
+    "dismissSuggestion": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "name"
+      ]
+    }
+  }
+}

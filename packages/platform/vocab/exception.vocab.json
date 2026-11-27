@@ -1,0 +1,16 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "exception",
+  "$comment": "@yaks/tools declares `exception`, what was thrown; a store that keeps one names its entity by it, before the `doc` it may also wear, so `app_errors` reads it as a failure.",
+  "$defs": {},
+  "kinds": {
+    "exception": {
+      "description": "What was thrown, retained in an answer or transcript entry. The catcher reports the original failure to the tracker separately.",
+      "before": [
+        "doc"
+      ]
+    }
+  }
+}

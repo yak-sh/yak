@@ -2,7 +2,6 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { sendable } from '@yaks/mail'
 import { CallError } from '@yaks/tools/errors'
-import { owned, ref, text } from './schema.ts'
 
 export let CONTRACTS = '/api/support-contracts'
 export let CONTRACT_REQUEST = '/operator/support-contract-request'
@@ -31,62 +30,6 @@ export type Billing = {
   invoice?: string
   /** A connected account when that account owns the billing objects. */
   account?: string
-}
-
-let integer = { type: 'integer' } as const
-let terms = {
-  annual: owned(integer),
-  onboarding: owned(integer),
-  monthly: owned(integer),
-  email: owned(text),
-  phone: owned(text),
-  start: owned(text),
-  renewal: owned(text),
-}
-
-export let supportWords = {
-  support_contract: {
-    component: true,
-    description:
-      'A space’s support fees in USD cents, included minutes per calendar month, direct channels, dates and the person supplying support.',
-    properties: {
-      ...terms,
-      space: owned({ ...ref('cascade'), ref: 'space' }),
-      provider: owned({ ...ref('keep'), ref: 'person' }),
-    },
-  },
-  support_contract_pending: {
-    component: true,
-    description:
-      'An admin’s support contract terms waiting for the payment provider to accept them.',
-    properties: {
-      key: owned(text),
-      data: owned(text),
-      space: owned({ ...ref('cascade'), ref: 'space' }),
-    },
-  },
-  support_contract_billing: {
-    component: true,
-    description:
-      'The subscription, one-time invoice and any connected account that owns those Stripe objects.',
-    properties: {
-      subscription: owned(text),
-      invoice: owned(text),
-      account: owned(text),
-    },
-  },
-  support_contract_time: {
-    component: true,
-    description:
-      'Minutes of work on one space’s support contract, dated and described by the person recording it.',
-    index: [['contract', 'day']],
-    properties: {
-      contract: owned({ ...ref('cascade'), ref: 'support_contract' }),
-      minutes: owned(integer),
-      day: owned(text),
-      note: owned(text),
-    },
-  },
 }
 
 export let dayOf = (now: number) => new Date(now).toISOString().slice(0, 10)

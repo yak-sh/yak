@@ -57,7 +57,7 @@
 
 import type { Eid } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { CORE_URI, type VocabDoc } from '@yaks/vocab'
+import { pick, type VocabDoc } from '@yaks/vocab/runtime'
 import doc from './vocab.json' with { type: 'json' }
 
 /** The component naming a Git object: what it is, and how long its body is. */
@@ -108,8 +108,4 @@ export let gitDoc: VocabDoc = doc
  * when that is not the graph its objects are in. It is the same declaration,
  * so the name means one thing in both.
  */
-export let refDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true },
-  title: doc.title,
-  $defs: { ref: doc.$defs.ref },
-}
+export let refDoc: VocabDoc = pick(gitDoc, ['ref'])

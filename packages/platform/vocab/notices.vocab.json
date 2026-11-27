@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "notice_subscription": {
+      "component": true,
+      "type": "object",
+      "floor": "owner",
+      "personal": "owner",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "root": {
+          "type": "string",
+          "stamped": true
+        },
+        "ticket": {
+          "type": "string",
+          "stamped": true
+        },
+        "requested_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "description": "An email recipient asking for this app’s notices; confirmed only after opening the letter’s link."
+    },
+    "notice_confirmed": {
+      "component": true,
+      "type": "object",
+      "floor": "owner",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "description": "The recipient confirmed that this address wants notices."
+    },
+    "notice_posted": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "default": {
+            "now": true
+          }
+        }
+      },
+      "description": "When a row first became a posted notice, independently of when its draft was created."
+    },
+    "notice_letter": {
+      "component": true,
+      "type": "object",
+      "floor": "owner",
+      "personal": "owner",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "A private confirmation or notice letter, including its recipient and subscription links."
+    }
+  }
+}

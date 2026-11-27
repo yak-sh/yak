@@ -15,6 +15,7 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
 import type { MarkedApp } from './routes.ts'
+import sideJson from './vocab/side.vocab.json' with { type: 'json' }
 
 /** A space the side's selector offers: whether it is the person's to own,
  * whether it is the one they open first (`member.own`), and of one they are
@@ -47,41 +48,7 @@ export let appsSpace = (line: string): string | undefined =>
 export let sideLine = (line: string): boolean =>
   line == SIDE_SPACES || !!appsSpace(line)
 
-let picked = {
-  type: 'object',
-  properties: {
-    space: { type: 'string' },
-    rank: { type: 'integer' },
-    slug: { type: 'string' },
-    title: { type: 'string' },
-    owner: { type: 'boolean' },
-    own: { type: 'boolean' },
-    whose: { type: 'string' },
-    operator: { type: 'string' },
-    logo: { type: 'string' },
-  },
-  required: ['space', 'rank', 'slug', 'title', 'owner', 'own'],
-}
-
-export let sideWords: VocabDoc = {
-  $defs: {
-    sideSpace: { component: true, ...picked },
-    sideApp: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: { type: 'string' },
-        rank: { type: 'integer' },
-        app: { type: 'string' },
-        slug: { type: 'string' },
-        title: { type: 'string' },
-        source: { type: ['string', 'null'] },
-        generatedIcon: { type: 'string' },
-      },
-      required: ['space', 'rank', 'app', 'slug', 'title'],
-    },
-  },
-}
+export let sideWords: VocabDoc = sideJson as VocabDoc
 
 /** The person's spaces as rows, `spaces` in the selector's order, each with
  * the eid of the space it is. */

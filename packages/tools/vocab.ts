@@ -1,14 +1,16 @@
 // The component declarations alone, exported as `@yaks/tools/vocab`. Nothing
 // here imports the runner, so a browser tab that only needs to read and write
 // these components loads nothing else.
-import type { VocabDoc } from '@yaks/vocab'
+import { pick, type VocabDoc } from '@yaks/vocab/runtime'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './package.json' with { type: 'json' }
-const { tool, ...calls } = doc.$defs
-/** Invocation records; compose with toolDoc or an existing tool declaration. */
-export const callDoc: VocabDoc = { $defs: calls }
-export const toolDoc: VocabDoc = { $defs: { tool } }
 export const toolsDoc: VocabDoc = doc
+/** Invocation records; compose with toolDoc or an existing tool declaration. */
+export const callDoc: VocabDoc = pick(
+  doc,
+  Object.keys(doc.$defs).filter((name) => name != 'tool'),
+)
+export const toolDoc: VocabDoc = pick(doc, ['tool'])
 
 /** What this package is: its manifest's description, the one place it is
  * written, which a host stamps on each document here. */

@@ -78,6 +78,7 @@ export let pick = (
   }
   let { $defs, kinds } = narrow(doc, (n) => names.includes(n))
   return {
+    ...(doc.$id ? { $id: doc.$id } : {}),
     ...(doc.$vocabulary ? { $vocabulary: doc.$vocabulary } : {}),
     ...(doc.package ? { package: doc.package } : {}),
     ...(title ? { title } : {}),

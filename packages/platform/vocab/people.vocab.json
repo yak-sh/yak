@@ -1,0 +1,214 @@
+{
+  "$defs": {
+    "holder": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "place": {
+          "type": "string"
+        },
+        "held": {
+          "type": "string"
+        },
+        "on": {
+          "type": "string"
+        },
+        "person": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "type": "string"
+        },
+        "sent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rank": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "space",
+        "place",
+        "held",
+        "on",
+        "person",
+        "role",
+        "rank"
+      ]
+    },
+    "admitted": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "operator",
+        "slug",
+        "role"
+      ]
+    },
+    "invitable": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "person": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "person",
+        "name",
+        "rank"
+      ]
+    },
+    "memberAdd": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "friend": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "memberRemove": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "email"
+      ]
+    },
+    "inviteAgain": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "invite": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "invite"
+      ]
+    },
+    "operatorAdmit": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "operator"
+      ]
+    },
+    "operatorOut": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "operator"
+      ]
+    }
+  }
+}

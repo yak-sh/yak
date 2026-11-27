@@ -1,0 +1,16 @@
+{
+  "$defs": {
+    "operatorDraft": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space"
+      ]
+    }
+  }
+}

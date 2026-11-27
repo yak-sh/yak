@@ -3,16 +3,12 @@
 export { computed } from './people.ts'
 import { derived as people } from './people.ts'
 import type { Derived } from '@yaks/sql'
-import type { VocabDoc } from '@yaks/vocab'
+import { pick, type VocabDoc } from '@yaks/vocab/runtime'
 import doc from './vocab.json' with { type: 'json' }
-import bug from './bug.json' with { type: 'json' }
 import manifest from './package.json' with { type: 'json' }
 
-export let bugDoc: VocabDoc = bug as VocabDoc
-export let trackerDoc: VocabDoc = {
-  ...doc,
-  $defs: { ...doc.$defs, ...bug.$defs },
-} as VocabDoc
+export let trackerDoc: VocabDoc = doc as VocabDoc
+export let bugDoc: VocabDoc = pick(trackerDoc, ['bug'], 'tracker-bug')
 export let derived = (): Derived => people
 export let description: string = manifest.description
 export let docs: VocabDoc[] = [trackerDoc]

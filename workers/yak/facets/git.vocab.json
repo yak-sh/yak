@@ -1,0 +1,9 @@
+{
+  "reserved": false,
+  "$defs": {
+    "git_mint": {
+      "effect": true,
+      "created": ["deploy"]
+    }
+  }
+}

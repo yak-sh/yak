@@ -1,0 +1,82 @@
+{
+  "$defs": {
+    "sideSpace": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "boolean"
+        },
+        "own": {
+          "type": "boolean"
+        },
+        "whose": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "logo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "rank",
+        "slug",
+        "title",
+        "owner",
+        "own"
+      ]
+    },
+    "sideApp": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        },
+        "app": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "generatedIcon": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "rank",
+        "app",
+        "slug",
+        "title"
+      ]
+    }
+  }
+}

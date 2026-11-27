@@ -20,6 +20,9 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { line } from '@yaks/query/core'
 import type { VocabDoc } from '@yaks/vocab'
+import operatorMatchesJson from './vocab/operator-matches.vocab.json' with {
+  type: 'json',
+}
 
 /** A round a member may pick in, with how many of its pairs are left for
  * them, of how many. */
@@ -84,42 +87,7 @@ export let matchesAsked = (
   return matchesPage(asked.space, asked.round) == text ? asked : undefined
 }
 
-let strings = { type: 'string' }
-let lists = { type: 'array' }
-let numbers = { type: 'integer' }
-
-export let matchesWords: VocabDoc = {
-  $defs: {
-    matchesPage: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        round: strings,
-        rounds: lists,
-        title: strings,
-        parts: lists,
-        card: { type: 'object' },
-        left: numbers,
-        picked: numbers,
-        places: lists,
-      },
-      required: ['space', 'round'],
-    },
-    pickMatch: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        round: strings,
-        pair: numbers,
-        chose: strings,
-        why: strings,
-      },
-      required: ['space', 'round', 'pair', 'chose'],
-    },
-  },
-}
+export let matchesWords: VocabDoc = operatorMatchesJson as VocabDoc
 
 /** The Matches page of `space` as `round` asks it (empty for its rounds),
  * as a row. */

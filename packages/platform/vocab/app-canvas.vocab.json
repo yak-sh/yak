@@ -1,0 +1,112 @@
+{
+  "$defs": {
+    "appMaking": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "made": {
+          "type": "object"
+        },
+        "pages": {
+          "type": "array"
+        },
+        "steps": {
+          "type": "array"
+        },
+        "draft": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "edited": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "drafts": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "app",
+        "made",
+        "pages",
+        "steps"
+      ]
+    },
+    "appDraftAct": {
+      "component": true,
+      "durable": "0s",
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "draft": {
+          "type": "string"
+        },
+        "act": {
+          "type": "string",
+          "enum": [
+            "release",
+            "discard"
+          ]
+        }
+      },
+      "required": [
+        "app",
+        "draft",
+        "act"
+      ]
+    },
+    "appDraftActed": {
+      "component": true,
+      "durable": "0s",
+      "type": "object",
+      "properties": {
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "said"
+      ]
+    },
+    "appDrafted": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "write": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "drafts": {
+          "type": "array"
+        },
+        "previews": {
+          "type": "array"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "app",
+        "drafts"
+      ]
+    }
+  }
+}

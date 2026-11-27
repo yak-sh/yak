@@ -1,8 +1,4 @@
 // The directory's deployment work; commit is declared by @yaks/git.
 import type { VocabDoc } from '@yaks/vocab'
-export let docs: VocabDoc[] = [{
-  reserved: false,
-  $defs: {
-    git_mint: { effect: true, created: ['deploy'] },
-  },
-}]
+import doc from './git.vocab.json' with { type: 'json' }
+export let docs: VocabDoc[] = [doc]

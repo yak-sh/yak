@@ -31,6 +31,7 @@
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
+import peopleJson from './vocab/people.vocab.json' with { type: 'json' }
 
 /** What one may do in a space or an app. */
 export type Role = 'owner' | 'editor' | 'viewer'
@@ -85,67 +86,7 @@ export let peopleLine = (line: string): boolean =>
   line == INVITABLE || holdersSpace(line) != undefined ||
   admittedSpace(line) != undefined
 
-let strings = { type: 'string' }
-let nullable = { type: ['string', 'null'] }
-
-// Every act names its space, and its answer says what it came to.
-let act = (properties: Record<string, unknown>, required: string[] = []) => ({
-  component: true,
-  type: 'object',
-  properties: { space: strings, ...properties, said: strings },
-  required: ['space', ...required],
-})
-
-export let peopleWords: VocabDoc = {
-  $defs: {
-    holder: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        place: strings,
-        held: strings,
-        on: strings,
-        person: strings,
-        name: strings,
-        email: nullable,
-        role: strings,
-        sent: nullable,
-        rank: { type: 'integer' },
-      },
-      required: ['space', 'place', 'held', 'on', 'person', 'role', 'rank'],
-    },
-    admitted: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        operator: strings,
-        slug: strings,
-        title: strings,
-        role: strings,
-      },
-      required: ['space', 'operator', 'slug', 'role'],
-    },
-    invitable: {
-      component: true,
-      type: 'object',
-      properties: { person: strings, name: strings, rank: { type: 'integer' } },
-      required: ['person', 'name', 'rank'],
-    },
-    memberAdd: act({
-      friend: strings,
-      email: strings,
-      app: strings,
-      role: strings,
-      note: strings,
-    }),
-    memberRemove: act({ email: strings, app: strings }, ['email']),
-    inviteAgain: act({ invite: strings }, ['invite']),
-    operatorAdmit: act({ operator: strings, role: strings }, ['operator']),
-    operatorOut: act({ operator: strings }, ['operator']),
-  },
-}
+export let peopleWords: VocabDoc = peopleJson as VocabDoc
 
 /** The acts the People page writes. */
 export let PEOPLE_ACTS = [

@@ -1,0 +1,44 @@
+{
+  "$defs": {
+    "updateCard": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        },
+        "update": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "space",
+        "rank",
+        "update"
+      ]
+    },
+    "updateOffer": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        },
+        "update": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "space",
+        "rank",
+        "update"
+      ]
+    }
+  }
+}

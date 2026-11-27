@@ -28,6 +28,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import type { Budget } from './meter.ts'
 import type { Tier } from './plans.ts'
 import type { Ceiling, Gauge } from './standing.ts'
+import paymentJson from './vocab/payment.vocab.json' with { type: 'json' }
 
 /** A plan a person can buy, and how often it is paid for. */
 export type Want = { tier: 'plus' | 'pro'; per: Per }
@@ -121,56 +122,7 @@ export let paymentPart = (
  * door reads them again on. */
 export let paymentLine = (line: string): boolean => !!paymentPart(line)
 
-let strings = { type: 'string' }
-let object = { type: 'object' }
-let spaced = (
-  properties: Record<string, unknown>,
-  required: string[] = [],
-) => ({
-  component: true,
-  type: 'object',
-  properties: { space: strings, ...properties },
-  required: ['space', ...required],
-})
-
-export let paymentWords: VocabDoc = {
-  $defs: {
-    planCard: spaced({
-      tier: strings,
-      ends: strings,
-      known: { type: 'boolean' },
-      free: strings,
-      sold: object,
-      invoice: { type: 'integer' },
-      awaiting: { type: 'boolean' },
-      credit: object,
-      provider: strings,
-    }, ['tier']),
-    selling: spaced({
-      state: strings,
-      house: { type: 'boolean' },
-      linkable: { type: 'boolean' },
-      provider: strings,
-      costs: object,
-      fee: { type: 'integer' },
-    }, ['state']),
-    billedTo: spaced({ email: strings, name: strings }),
-    allowances: spaced({
-      limits: object,
-      budget: object,
-      read: { type: ['string', 'null'] },
-    }),
-    creditCap: spaced({ cap: { type: 'integer' } }, ['cap']),
-    invoiceAsk: spaced({ email: strings, name: strings }),
-    sellStop: spaced({}),
-    leave: spaced({
-      door: strings,
-      tier: strings,
-      per: strings,
-      url: strings,
-    }, ['door']),
-  },
-}
+export let paymentWords: VocabDoc = paymentJson as VocabDoc
 
 let row = (part: Part, space: string, value: object): Bundle => ({
   entity: { eid: derivedEid(`${part}|${space}`) },

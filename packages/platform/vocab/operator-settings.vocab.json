@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "operatorSettings": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "voice": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "voice_speed": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "voice_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "voice_backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "alerting": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "by": {
+          "type": "string"
+        },
+        "browsers": {
+          "type": "integer"
+        }
+      }
+    },
+    "texting": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "number",
+        "at"
+      ]
+    },
+    "allowPush": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "subscription": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "subscription"
+      ]
+    },
+    "agreeTexts": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "number": {
+          "type": "string"
+        },
+        "agreed": {
+          "type": "boolean"
+        },
+        "code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "stopTexts": {
+      "component": true,
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

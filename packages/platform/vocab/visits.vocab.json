@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "visitCount": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "days": {
+          "type": "integer"
+        },
+        "bots": {
+          "type": "boolean"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "split": {
+          "type": "object",
+          "properties": {
+            "people": {
+              "type": "integer"
+            },
+            "bots": {
+              "type": "integer"
+            },
+            "verified": {
+              "type": "integer"
+            },
+            "unknown": {
+              "type": "integer"
+            }
+          }
+        },
+        "daily": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "day": {
+                "type": "string"
+              },
+              "views": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "views": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "from": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "views": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "countries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "views": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "off": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "visitDay": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "views": {
+          "type": "integer"
+        },
+        "off": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "space"
+      ]
+    }
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "$defs": {
+    "planCard": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "tier": {
+          "type": "string"
+        },
+        "ends": {
+          "type": "string"
+        },
+        "known": {
+          "type": "boolean"
+        },
+        "free": {
+          "type": "string"
+        },
+        "sold": {
+          "type": "object"
+        },
+        "invoice": {
+          "type": "integer"
+        },
+        "awaiting": {
+          "type": "boolean"
+        },
+        "credit": {
+          "type": "object"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "tier"
+      ]
+    },
+    "selling": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "house": {
+          "type": "boolean"
+        },
+        "linkable": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "costs": {
+          "type": "object"
+        },
+        "fee": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "space",
+        "state"
+      ]
+    },
+    "billedTo": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "allowances": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "limits": {
+          "type": "object"
+        },
+        "budget": {
+          "type": "object"
+        },
+        "read": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "creditCap": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "cap": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "space",
+        "cap"
+      ]
+    },
+    "invoiceAsk": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "sellStop": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "leave": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "door": {
+          "type": "string"
+        },
+        "tier": {
+          "type": "string"
+        },
+        "per": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "door"
+      ]
+    }
+  }
+}

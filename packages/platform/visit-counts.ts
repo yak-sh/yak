@@ -21,6 +21,7 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Split } from './visitor.ts'
+import visitsJson from './vocab/visits.vocab.json' with { type: 'json' }
 
 /** A day's views, or a name (a page, a site, a country) and its views. */
 export type Day = { day: string; views: number }
@@ -73,64 +74,7 @@ export let NOT_ON =
   'Visitor counts are not switched on for this platform yet, so there is ' +
   'nothing to show.'
 
-let named = {
-  type: 'array',
-  items: {
-    type: 'object',
-    properties: { name: { type: 'string' }, views: { type: 'integer' } },
-  },
-}
-
-export let visitWords: VocabDoc = {
-  $defs: {
-    visitCount: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: { type: 'string' },
-        app: { type: 'string' },
-        days: { type: 'integer' },
-        bots: { type: 'boolean' },
-        total: { type: 'integer' },
-        split: {
-          type: 'object',
-          properties: {
-            people: { type: 'integer' },
-            bots: { type: 'integer' },
-            verified: { type: 'integer' },
-            unknown: { type: 'integer' },
-          },
-        },
-        daily: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              day: { type: 'string' },
-              views: { type: 'integer' },
-            },
-          },
-        },
-        pages: named,
-        from: named,
-        countries: named,
-        off: { type: 'boolean' },
-      },
-      required: ['space'],
-    },
-    visitDay: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: { type: 'string' },
-        app: { type: 'string' },
-        views: { type: 'integer' },
-        off: { type: 'boolean' },
-      },
-      required: ['space'],
-    },
-  },
-}
+export let visitWords: VocabDoc = visitsJson as VocabDoc
 
 /** The views of each app of the space `space`, as rows: `counts` by app, or
  * null where the platform cannot say; people's, or every visit where

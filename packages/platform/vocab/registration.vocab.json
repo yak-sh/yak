@@ -1,0 +1,16 @@
+{
+  "$defs": {
+    "register_writes": {
+      "effect": true,
+      "created": [
+        "created",
+        "updated"
+      ],
+      "changed": [
+        "updated"
+      ],
+      "target": "(.created.via !created.by|.updated.via !updated.by)",
+      "description": "register this browser’s guest work for durable attribution"
+    }
+  }
+}

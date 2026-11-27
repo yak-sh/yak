@@ -1,0 +1,283 @@
+{
+  "$defs": {
+    "account": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "first": {
+          "type": "string"
+        }
+      }
+    },
+    "signedIn": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "place": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent"
+      ]
+    },
+    "signOut": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session"
+      ]
+    },
+    "befriended": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "person": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "seen": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string"
+            },
+            "activity": {
+              "type": "string",
+              "enum": [
+                "active",
+                "away",
+                "offline"
+              ]
+            },
+            "last": {
+              "type": "string"
+            },
+            "spaces": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "slug": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "space": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "apps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "slug": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "space": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "shared": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "eid": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "space": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "person",
+        "rank",
+        "name",
+        "shared"
+      ]
+    },
+    "sharedApp": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "rank": {
+          "type": "integer"
+        },
+        "eid": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "space": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rank",
+        "eid",
+        "slug",
+        "title",
+        "space"
+      ]
+    },
+    "invitePage": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "said": {
+          "type": "string"
+        },
+        "link": {
+          "type": "string"
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mail": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "joined": {
+          "type": "integer"
+        },
+        "built": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "said",
+        "link",
+        "text",
+        "mail",
+        "address",
+        "joined",
+        "built"
+      ]
+    },
+    "chatLink": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "rank": {
+          "type": "integer"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "integration": {
+          "type": "string"
+        },
+        "accounts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "rank",
+        "platform",
+        "integration",
+        "accounts"
+      ]
+    },
+    "friendMessage": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "words": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "operator": {
+          "type": "boolean"
+        },
+        "invite": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "words"
+      ]
+    },
+    "friendAsk": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "email"
+      ]
+    }
+  }
+}

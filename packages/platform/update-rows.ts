@@ -19,6 +19,7 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Choice } from '@yaks/task'
+import updateJson from './vocab/update.vocab.json' with { type: 'json' }
 
 /** Where an update came from: its conversation, opened in the chat at the
  * entry it was written from. */
@@ -85,20 +86,7 @@ export let cardsSpace = (line: string): string | undefined =>
 export let offersSpace = (line: string): string | undefined =>
   line.startsWith(OFFERS) ? line.slice(OFFERS.length) : undefined
 
-let held = {
-  component: true,
-  type: 'object',
-  properties: {
-    space: { type: 'string' },
-    rank: { type: 'integer' },
-    update: { type: 'object' },
-  },
-  required: ['space', 'rank', 'update'],
-}
-
-export let updateWords: VocabDoc = {
-  $defs: { updateCard: held, updateOffer: held },
-}
+export let updateWords: VocabDoc = updateJson as VocabDoc
 
 type Held = { space: string; rank: number; update: Update }
 type From = 'updateCard' | 'updateOffer'

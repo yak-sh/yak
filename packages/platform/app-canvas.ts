@@ -31,6 +31,7 @@ import {
   editedAt,
 } from './draft-choice.ts'
 import type { Version } from './versions.ts'
+import appCanvasJson from './vocab/app-canvas.vocab.json' with { type: 'json' }
 
 /** An open draft as the app's writers see it. */
 export type ShownDraft = {
@@ -138,57 +139,7 @@ export let draftedRow = (
   appDrafted: { app, ...drafted },
 })
 
-let list = { type: 'array' }
-let nullable = { type: ['string', 'null'] }
-
-export let appCanvasWords: VocabDoc = {
-  $defs: {
-    appMaking: {
-      component: true,
-      type: 'object',
-      properties: {
-        app: { type: 'string' },
-        made: { type: 'object' },
-        pages: list,
-        steps: list,
-        draft: nullable,
-        edited: nullable,
-        drafts: list,
-      },
-      required: ['app', 'made', 'pages', 'steps'],
-    },
-    appDraftAct: {
-      component: true,
-      durable: '0s',
-      type: 'object',
-      properties: {
-        app: { type: 'string' },
-        draft: { type: 'string' },
-        act: { type: 'string', enum: ['release', 'discard'] },
-      },
-      required: ['app', 'draft', 'act'],
-    },
-    appDraftActed: {
-      component: true,
-      durable: '0s',
-      type: 'object',
-      properties: { said: { type: 'string' } },
-      required: ['said'],
-    },
-    appDrafted: {
-      component: true,
-      type: 'object',
-      properties: {
-        app: { type: 'string' },
-        write: nullable,
-        drafts: list,
-        previews: list,
-        source: nullable,
-      },
-      required: ['app', 'drafts'],
-    },
-  },
-}
+export let appCanvasWords: VocabDoc = appCanvasJson as VocabDoc
 
 /** What `person` may see of the app `app` being made, as its row. */
 export let makingRow = (

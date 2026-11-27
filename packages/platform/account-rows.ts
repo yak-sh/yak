@@ -27,6 +27,7 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Activity } from '@yaks/notify/whereabouts'
 import type { VocabDoc } from '@yaks/vocab'
+import accountJson from './vocab/account.vocab.json' with { type: 'json' }
 
 /** The person's account. */
 export let ACCOUNT = '.account'
@@ -118,138 +119,7 @@ export type FriendMessage = {
   invite?: string
 }
 
-let strings = { type: 'string' }
-let named = {
-  type: 'array',
-  items: {
-    type: 'object',
-    properties: { slug: strings, title: strings, space: strings },
-  },
-}
-
-export let accountWords: VocabDoc = {
-  $defs: {
-    account: {
-      component: true,
-      type: 'object',
-      properties: {
-        name: strings,
-        email: strings,
-        hidden: { type: 'boolean' },
-        first: strings,
-      },
-    },
-    signedIn: {
-      component: true,
-      type: 'object',
-      properties: { agent: strings, place: strings, at: strings },
-      required: ['agent'],
-    },
-    signOut: {
-      component: true,
-      type: 'object',
-      properties: { session: strings },
-      required: ['session'],
-    },
-    befriended: {
-      component: true,
-      type: 'object',
-      properties: {
-        person: strings,
-        rank: { type: 'integer' },
-        name: strings,
-        seen: {
-          type: 'object',
-          properties: {
-            state: strings,
-            activity: { type: 'string', enum: ['active', 'away', 'offline'] },
-            last: strings,
-            spaces: named,
-            apps: named,
-          },
-        },
-        shared: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              eid: strings,
-              slug: strings,
-              title: strings,
-              space: strings,
-            },
-          },
-        },
-      },
-      required: ['person', 'rank', 'name', 'shared'],
-    },
-    sharedApp: {
-      component: true,
-      type: 'object',
-      properties: {
-        rank: { type: 'integer' },
-        eid: strings,
-        slug: strings,
-        title: strings,
-        space: strings,
-      },
-      required: ['rank', 'eid', 'slug', 'title', 'space'],
-    },
-    invitePage: {
-      component: true,
-      type: 'object',
-      properties: {
-        said: strings,
-        link: strings,
-        text: { type: ['string', 'null'] },
-        mail: strings,
-        address: strings,
-        joined: { type: 'integer' },
-        built: { type: 'integer' },
-      },
-      required: [
-        'said',
-        'link',
-        'text',
-        'mail',
-        'address',
-        'joined',
-        'built',
-      ],
-    },
-    chatLink: {
-      component: true,
-      type: 'object',
-      properties: {
-        rank: { type: 'integer' },
-        platform: strings,
-        integration: strings,
-        accounts: { type: 'array', items: strings },
-      },
-      required: ['rank', 'platform', 'integration', 'accounts'],
-    },
-    friendMessage: {
-      component: true,
-      type: 'object',
-      properties: {
-        from: strings,
-        to: strings,
-        words: strings,
-        at: strings,
-        read: { type: 'boolean' },
-        operator: { type: 'boolean' },
-        invite: strings,
-      },
-      required: ['to', 'words'],
-    },
-    friendAsk: {
-      component: true,
-      type: 'object',
-      properties: { email: strings },
-      required: ['email'],
-    },
-  },
-}
+export let accountWords: VocabDoc = accountJson as VocabDoc
 
 /** The eid of `person`'s account row. */
 export let accountEid = (person: string): string =>

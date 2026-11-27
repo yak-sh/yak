@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "agentsConnected": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "agents"
+      ]
+    },
+    "agentGrant": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "client": {
+          "type": "string"
+        },
+        "created": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "client",
+        "created"
+      ]
+    },
+    "disconnectAgent": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent"
+      ]
+    }
+  }
+}

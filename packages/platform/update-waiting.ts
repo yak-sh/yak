@@ -3,6 +3,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Kept } from '@yaks/api/reached'
 import { PLATFORM_STORE } from './names.ts'
+import waitingJson from './vocab/waiting.vocab.json' with { type: 'json' }
 
 /** The page graph's read of the signed-in person's Updates badges. */
 export let UPDATE_WAITING = '.updateWaiting'
@@ -10,20 +11,7 @@ export let UPDATE_WAITING = '.updateWaiting'
 /** The badge for one space, identified by the space even if it is renamed. */
 export type UpdateWaiting = { space: string; slug: string; count: number }
 
-export let waitingWords: VocabDoc = {
-  $defs: {
-    updateWaiting: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: { type: 'string' },
-        slug: { type: 'string' },
-        count: { type: 'integer' },
-      },
-      required: ['space', 'slug', 'count'],
-    },
-  },
-}
+export let waitingWords: VocabDoc = waitingJson as VocabDoc
 
 export let waitingBundle = (
   person: string,

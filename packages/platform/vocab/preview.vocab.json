@@ -1,0 +1,56 @@
+{
+  "title": "directory-preview",
+  "reserved": false,
+  "$defs": {
+    "preview_link": {
+      "description": "A preview link: the random code its address carries, the draft it shows or else the version of its app, as whom, and until when. Deleting it revokes the link.",
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "unique": true,
+          "stamped": true
+        },
+        "app": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        },
+        "space": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        },
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        },
+        "draft": {
+          "type": "string",
+          "index": true,
+          "stamped": true
+        },
+        "version": {
+          "type": "number",
+          "stamped": true
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "screen": {
+          "type": "string",
+          "stamped": true
+        }
+      }
+    }
+  }
+}

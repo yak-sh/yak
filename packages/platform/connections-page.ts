@@ -30,6 +30,9 @@ import type { Tier } from './plans.ts'
 /** One thing a person gives to connect a pasted-key service, and the one a
  * service that declares none asks for: its key (@yaks/connections `Field`). */
 import { type Field as KeyField, KEY } from '@yaks/connections/form'
+import connectionsJson from './vocab/connections.vocab.json' with {
+  type: 'json',
+}
 
 export { KEY, type KeyField }
 
@@ -339,56 +342,7 @@ export let movedRow = (person: string, space: string): Bundle => ({
   connectionsMoved: { space },
 })
 
-let strings = { type: 'string' }
-let lists = { type: 'array' }
-let objects = { type: 'object' }
-
-export let connectionsWords: VocabDoc = {
-  $defs: {
-    connectionsPage: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        ask: strings,
-        on: { type: 'boolean' },
-        list: lists,
-        borrowed: lists,
-        services: lists,
-        built: lists,
-        mcp: objects,
-        catalog: objects,
-        asked: objects,
-        open: strings,
-        trash: lists,
-        enable: lists,
-        plan: objects,
-      },
-      required: ['space', 'ask'],
-    },
-    connectionAct: {
-      component: true,
-      type: 'object',
-      properties: { space: strings, page: strings, form: objects },
-      required: ['space', 'form'],
-    },
-    connectionsMoved: {
-      component: true,
-      type: 'object',
-      properties: { space: strings },
-      required: ['space'],
-    },
-    connectionActed: {
-      component: true,
-      type: 'object',
-      properties: {
-        say: strings,
-        no: { type: 'boolean' },
-        go: strings,
-      },
-    },
-  },
-}
+export let connectionsWords: VocabDoc = connectionsJson as VocabDoc
 
 /** The Connections page of `space` as `ask` asks it, as a row. */
 export let pageRow = (space: string, ask: string, c: Connections): Bundle => ({

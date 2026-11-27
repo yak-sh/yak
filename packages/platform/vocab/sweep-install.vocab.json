@@ -1,0 +1,9 @@
+{
+  "reserved": false,
+  "$defs": {
+    "sweep_install": {
+      "effect": true,
+      "start": true
+    }
+  }
+}

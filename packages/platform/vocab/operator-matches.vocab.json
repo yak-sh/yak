@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "matchesPage": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "round": {
+          "type": "string"
+        },
+        "rounds": {
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "parts": {
+          "type": "array"
+        },
+        "card": {
+          "type": "object"
+        },
+        "left": {
+          "type": "integer"
+        },
+        "picked": {
+          "type": "integer"
+        },
+        "places": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "space",
+        "round"
+      ]
+    },
+    "pickMatch": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "round": {
+          "type": "string"
+        },
+        "pair": {
+          "type": "integer"
+        },
+        "chose": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "round",
+        "pair",
+        "chose"
+      ]
+    }
+  }
+}

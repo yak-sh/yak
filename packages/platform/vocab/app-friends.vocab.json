@@ -1,0 +1,60 @@
+{
+  "title": "app-friends",
+  "$defs": {
+    "app_friends": {
+      "component": true,
+      "type": "object",
+      "description": "The current player’s permission for this app.",
+      "properties": {
+        "signed_in": {
+          "type": "boolean",
+          "stamped": true
+        },
+        "allowed": {
+          "type": "boolean",
+          "stamped": true
+        }
+      }
+    },
+    "app_friend": {
+      "component": true,
+      "type": "object",
+      "description": "A confirmed friend of the current player.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "stamped": true
+        },
+        "avatar": {
+          "type": "string",
+          "stamped": true
+        },
+        "presence": {
+          "type": "string",
+          "enum": [
+            "online",
+            "building",
+            "away",
+            "unknown"
+          ],
+          "stamped": true
+        }
+      }
+    },
+    "friend_invite": {
+      "component": true,
+      "type": "object",
+      "description": "Invite a friend to an app-relative play link.",
+      "properties": {
+        "to": {
+          "type": "string",
+          "stamped": true
+        },
+        "path": {
+          "type": "string",
+          "stamped": true
+        }
+      }
+    }
+  }
+}

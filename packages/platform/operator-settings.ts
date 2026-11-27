@@ -18,6 +18,9 @@
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
+import operatorSettingsJson from './vocab/operator-settings.vocab.json' with {
+  type: 'json',
+}
 
 /** How a person may choose to be told something away from the page. */
 export type Channel = 'push' | 'text' | 'email' | 'updates'
@@ -64,59 +67,7 @@ export let TEXTING = '.texting'
 export let reachedLine = (line: string): boolean =>
   line == ALERTING || line == TEXTING
 
-let strings = { type: 'string' }
-let nullable = { type: ['string', 'null'] }
-
-export let operatorSettingsWords: VocabDoc = {
-  $defs: {
-    operatorSettings: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        name: nullable,
-        voice: nullable,
-        voice_speed: nullable,
-        voice_model: nullable,
-        voice_backend: nullable,
-      },
-      required: ['space'],
-    },
-    alerting: {
-      component: true,
-      type: 'object',
-      properties: {
-        channel: nullable,
-        by: strings,
-        browsers: { type: 'integer' },
-      },
-    },
-    texting: {
-      component: true,
-      type: 'object',
-      properties: { number: strings, at: strings },
-      required: ['number', 'at'],
-    },
-    allowPush: {
-      component: true,
-      type: 'object',
-      properties: { subscription: { type: 'object' } },
-      required: ['subscription'],
-    },
-    agreeTexts: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        number: strings,
-        agreed: { type: 'boolean' },
-        code: strings,
-      },
-      required: ['space'],
-    },
-    stopTexts: { component: true, type: 'object', properties: {} },
-  },
-}
+export let operatorSettingsWords: VocabDoc = operatorSettingsJson as VocabDoc
 
 /** The eid of the Operator's settings in the space `space`. */
 export let settingsEid = (space: string): string =>

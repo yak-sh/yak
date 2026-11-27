@@ -13,6 +13,9 @@ import type { Bundle } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Client } from '@yaks/client'
 import type { Store } from '@yaks/draft/browser'
+import operatorDraftsJson from './vocab/operator-drafts.vocab.json' with {
+  type: 'json',
+}
 
 let LINE = /^\.operatorDraft\.space=([^&]+)&\*$/
 
@@ -26,16 +29,7 @@ export let operatorDrafts = (eid: string): string =>
 export let draftsSpace = (line: string): string | undefined =>
   LINE.exec(line)?.[1]
 
-export let operatorDraftWords: VocabDoc = {
-  $defs: {
-    operatorDraft: {
-      component: true,
-      type: 'object',
-      properties: { space: { type: 'string' } },
-      required: ['space'],
-    },
-  },
-}
+export let operatorDraftWords: VocabDoc = operatorDraftsJson as VocabDoc
 
 /** The drafts `rows` of the space `space`, as its line answers them and a
  * write of them is sent. */

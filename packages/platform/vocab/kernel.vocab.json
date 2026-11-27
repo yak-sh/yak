@@ -1,0 +1,251 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "kernel",
+  "$defs": {
+    "error": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "message": {
+          "type": "string",
+          "stamped": true
+        },
+        "code": {
+          "type": "string"
+        }
+      },
+      "$comment": "A known failure state the platform reports deliberately, as against a break nobody chose. `app_errors` reads both facets in every store, so both are declared in every store.\n\n`code` is @yaks/tools' half of this word: what a refused call says about itself, written by the runner rather than stamped by the platform. One word, both meanings, so a store never has to choose."
+    },
+    "blob": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "number"
+        }
+      },
+      "$comment": "The two rows a page's upload makes (./uploads.ts): the content, addressed by its sha, and the use of it, addressed off that. They stay apart because they are two things, and because a component may not point at its own entity."
+    },
+    "attachment": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "properties": {
+        "blob": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        },
+        "mime": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "artifact": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "user",
+            "model"
+          ]
+        },
+        "call": {
+          "type": "string"
+        },
+        "revised_prompt": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "$comment": "The web address the file was fetched from (library-tools.ts)."
+        }
+      }
+    },
+    "document_page": {
+      "component": true,
+      "type": "object",
+      "description": "Text extracted from one stored document page; searchable by words and meaning.",
+      "properties": {
+        "document": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        },
+        "blob": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        },
+        "page": {
+          "type": "number",
+          "stamped": true
+        },
+        "location": {
+          "type": "string",
+          "stamped": true
+        },
+        "text": {
+          "type": "string",
+          "search": true,
+          "stamped": true
+        }
+      },
+      "$comment": "Removing an upload's content row retains both the row in graph trash and its bytes for recovery. A permanent purge needs its owner's choice."
+    },
+    "document_text": {
+      "component": true,
+      "type": "object",
+      "description": "Completed extraction of an attachment’s immutable bytes.",
+      "properties": {
+        "blob": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        },
+        "pages": {
+          "type": "number",
+          "stamped": true
+        }
+      }
+    },
+    "document_extract": {
+      "effect": true,
+      "created": [
+        "attachment"
+      ],
+      "changed": [
+        "attachment.blob",
+        "attachment.mime",
+        "attachment.name"
+      ],
+      "target": ".attachment",
+      "description": "Extract stored documents once into searchable pages, reading scanned pages too."
+    },
+    "hearing": {
+      "component": true,
+      "type": "object",
+      "description": "An upload asked to be heard through ./api/speech/hear.",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "$comment": "A recording the app keeps, heard whole (hearings.ts): the speech door asks with `hearing` on the upload's own entity, the one its `attachment` is on, and the store's effect hears it and writes each turn, then `heard`, or `failed` with why. Only the door asks, so only whoever may ask the app's models spends its space's budget on it."
+    },
+    "heard": {
+      "component": true,
+      "type": "object",
+      "description": "An upload heard whole: its seconds, its turns and whether they tell speakers apart.",
+      "properties": {
+        "seconds": {
+          "type": "number",
+          "stamped": true
+        },
+        "turns": {
+          "type": "number",
+          "stamped": true
+        },
+        "speakers": {
+          "type": "boolean",
+          "stamped": true
+        }
+      }
+    },
+    "heard_turn": {
+      "component": true,
+      "type": "object",
+      "description": "What one speaker said in a heard upload, and its seconds in the recording.",
+      "properties": {
+        "recording": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "$comment": "Not stamped, so deleting the upload deletes its turns: a cascade never follows a stamped reference (@yaks/vocab `deaths`)."
+        },
+        "speaker": {
+          "type": "number",
+          "stamped": true
+        },
+        "text": {
+          "type": "string",
+          "stamped": true
+        },
+        "from": {
+          "type": "number",
+          "stamped": true
+        },
+        "to": {
+          "type": "number",
+          "stamped": true
+        }
+      }
+    },
+    "speech_hear": {
+      "effect": true,
+      "created": [
+        "hearing"
+      ],
+      "changed": [
+        "hearing.at"
+      ],
+      "target": ".hearing",
+      "description": "Hear an upload whole once asked, writing each turn and charging its minutes."
+    },
+    "delete_upload": {
+      "effect": true,
+      "removed": [
+        "blob",
+        "artifact"
+      ],
+      "description": "tell the platform an upload is no longer served, retaining its bytes in trash",
+      "$comment": "An upload's content row gone (its `blob`, or a model's `artifact`): no row names its bytes any more, so its address stops answering. The bytes stay, for recovery from trash."
+    },
+    "decision_ask": {
+      "effect": true,
+      "created": [
+        "decision",
+        "decided",
+        "filed"
+      ],
+      "changed": [
+        "filed.assignee"
+      ],
+      "target": ".decision !cancelled",
+      "tries": 3,
+      "description": "ask or close the app’s decision in its person’s Updates, through the space’s Operator",
+      "$comment": "A decision written here, by a workflow's step or the app's code, is asked in its person's Updates, and their answer comes back on it as `decided{choice}` (workers/yak app-decisions.ts)."
+    },
+    "notify_deaths": {
+      "effect": true,
+      "removed": [
+        "created"
+      ],
+      "description": "tell the space’s other apps an entity here died, so their references to it follow their death rules",
+      "$comment": "Every entity here carries `created`, so its removal is the entity's death (deaths.ts)."
+    }
+  }
+}

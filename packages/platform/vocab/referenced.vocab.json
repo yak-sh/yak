@@ -1,0 +1,15 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/edge": true
+  },
+  "title": "relations",
+  "$defs": {
+    "referenced": {
+      "component": true,
+      "type": "object",
+      "edge": true,
+      "properties": {}
+    }
+  }
+}

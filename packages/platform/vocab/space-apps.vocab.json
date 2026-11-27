@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "spaceApp": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "generatedIcon": {
+          "type": "string"
+        },
+        "home": {
+          "type": "boolean"
+        },
+        "access": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gallery": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "visits": {
+          "type": "integer"
+        },
+        "made": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "at": {
+              "type": "string"
+            },
+            "by": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "deployed": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "at": {
+              "type": "string"
+            },
+            "by": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "space",
+        "app",
+        "slug",
+        "title"
+      ]
+    },
+    "appBroken": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "space",
+        "app",
+        "errors"
+      ]
+    }
+  }
+}

@@ -1,6 +1,9 @@
 // Hosted providers remain server-owned, alongside release start-up work.
 import { modelDoc } from '@yaks/model/vocab'
 import { pick, type VocabDoc } from '@yaks/vocab'
+import modelsInstallJson from './vocab/models-install.vocab.json' with {
+  type: 'json',
+}
 let providers = pick(modelDoc, ['provider', 'serves', 'price'])
 export let docs: VocabDoc[] = [{
   ...providers,
@@ -9,7 +12,4 @@ export let docs: VocabDoc[] = [{
       [name, definition],
     ) => [name, { ...definition, wire: false }]),
   ),
-}, {
-  reserved: false,
-  $defs: { models_install: { effect: true, start: true } },
-}]
+}, modelsInstallJson as VocabDoc]

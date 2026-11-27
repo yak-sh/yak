@@ -22,6 +22,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Stamp, Writers } from './app-tile.ts'
 import type { MarkedApp } from './routes.ts'
+import spaceAppsJson from './vocab/space-apps.vocab.json' with { type: 'json' }
 
 /** What the space's Operator made of a break: its answer, or why it could
  * not finish; neither while it works. */
@@ -76,46 +77,7 @@ export let brokenApps = (eid: string): string => BROKEN + eid
 export let brokenSpace = (line: string): string | undefined =>
   line.startsWith(BROKEN) ? line.slice(BROKEN.length) : undefined
 
-let strings = { type: 'string' }
-let stamp = {
-  type: ['object', 'null'],
-  properties: { at: strings, by: { type: ['string', 'null'] }, name: strings },
-}
-
-export let spaceAppsWords: VocabDoc = {
-  $defs: {
-    spaceApp: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        app: strings,
-        slug: strings,
-        title: strings,
-        source: { type: ['string', 'null'] },
-        generatedIcon: strings,
-        home: { type: 'boolean' },
-        access: { type: ['string', 'null'] },
-        gallery: strings,
-        installed: { type: 'boolean' },
-        visits: { type: 'integer' },
-        made: stamp,
-        deployed: stamp,
-      },
-      required: ['space', 'app', 'slug', 'title'],
-    },
-    appBroken: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        app: strings,
-        errors: { type: 'array', items: { type: 'object' } },
-      },
-      required: ['space', 'app', 'errors'],
-    },
-  },
-}
+export let spaceAppsWords: VocabDoc = spaceAppsJson as VocabDoc
 
 // A property the row has no word on is left out, as the graph keeps it.
 let drop = <T extends Record<string, unknown>>(o: T): T =>

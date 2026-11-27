@@ -10,7 +10,9 @@ import { gitDoc } from '@yaks/git/vocab'
 import { narrow, type VocabDoc } from '@yaks/vocab/runtime'
 
 /** Select definitions without changing their schemas or document metadata.
- * Every name must exist: a misspelled selection must not silently lose words. */
+ * Every name must exist: a misspelled selection must not silently lose words.
+ * A kind a document declares of another document's component is kept with it
+ * (@yaks/vocab `narrow`), since no pick of this plugin's words names it. */
 export let selected = (
   docs: VocabDoc[],
   names: string[] | undefined,
@@ -25,7 +27,7 @@ export let selected = (
   }
   let wanted = new Set(names)
   return docs.map((d) => narrow(d, (name) => wanted.has(name)))
-    .filter((d) => Object.keys(d.$defs!).length)
+    .filter((d) => Object.keys(d.$defs!).length || d.kinds)
 }
 
 /** A graph's own component declarations replace the plugins' declarations

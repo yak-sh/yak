@@ -1,0 +1,409 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "apps",
+  "$defs": {
+    "product": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "properties": {
+        "price_cents": {
+          "type": "number"
+        },
+        "sizes": {
+          "type": "string"
+        },
+        "stock": {
+          "type": "number"
+        },
+        "image": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "$comment": "Something for sale (sell.ts, T-34525). Platform's rather than each app's for the reason every other word here is platform's — a `product` in one shop is the same word as a `product` in the next, so one filter reads both — and for one more: the checkout door reads `price_cents` off this row, and a door that took the price off the wire would take a price a buyer can edit. A word the platform charges money against is a word the platform declares.\n\n`sizes` is the variants the seller offers, comma-separated, and what a page turns into the `options` on a cart line. `stock` is the seller's own count — nothing here decrements it, because a shop that oversells by one is a conversation and a shop that loses an order to a race is a bug."
+    },
+    "fund": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "properties": {
+        "holder": {
+          "type": "string"
+        },
+        "amounts_cents": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "test": {
+          "type": "boolean"
+        }
+      },
+      "$comment": "What a space takes gifts for (sell.ts `giving`, T-3630): `doc.title` is the fund's name the donor reads first, `holder` the legal name a receipt says received the gift, `amounts_cents` the suggested amounts, comma-separated, and `statement` what a receipt says was given in return, where the default (\"no goods or services\") is not the case. Platform's for the reason `product` is: the giving door reads it."
+    },
+    "fund_receipt": {
+      "component": true,
+      "type": "object",
+      "shown": "editor",
+      "description": "The legal recipient and acknowledgement used in a fund’s receipts.",
+      "properties": {
+        "holder": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        }
+      }
+    },
+    "gift": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "readers": "editor",
+      "before": [
+        "doc"
+      ],
+      "properties": {
+        "fund": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "session": {
+          "type": "string",
+          "stamped": true
+        },
+        "invoice": {
+          "type": "string",
+          "stamped": true
+        },
+        "subscription": {
+          "type": "string",
+          "stamped": true
+        },
+        "payer": {
+          "type": "string",
+          "stamped": true
+        },
+        "account": {
+          "type": "string",
+          "stamped": true
+        },
+        "total_cents": {
+          "type": "number",
+          "stamped": true
+        },
+        "covered_cents": {
+          "type": "number",
+          "stamped": true
+        },
+        "test": {
+          "type": "boolean",
+          "stamped": true
+        },
+        "holder": {
+          "type": "string",
+          "stamped": true
+        },
+        "statement": {
+          "type": "string",
+          "stamped": true
+        },
+        "email": {
+          "type": "string",
+          "stamped": true
+        },
+        "name": {
+          "type": "string",
+          "stamped": true
+        },
+        "per": {
+          "type": "string",
+          "enum": [
+            "month"
+          ],
+          "stamped": true
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "$comment": "A gift received (sell.ts `gave`): one row per payment, a one-time gift's checkout or one month of a monthly gift's invoice, written by the shops webhook as `order` is. `total_cents` is what was paid, of which `covered_cents` the donor added to cover the provider's fee. `payer` and `subscription` are the provider's, and name what the receipt's cancel link opens the portal for."
+    },
+    "refund_request": {
+      "component": true,
+      "type": "object",
+      "readers": "editor",
+      "status": {
+        "completed": "refunded",
+        "refund_failed": "failed",
+        "refund_sent": "processing",
+        "default": "requested"
+      },
+      "properties": {
+        "order": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "amount": {
+          "type": "number",
+          "stamped": true
+        },
+        "reason": {
+          "type": "string",
+          "stamped": true
+        }
+      },
+      "$comment": "Something sold (sell.ts, T-34526): one row per completed checkout at the payment provider, written into the app's own store by its shops webhook, as the app. Platform's rather than each app's for the reason `product` is: the platform writes it, and a word the platform writes is a word the platform declares — an app that declared its own `order` would have the platform writing into a shape it does not know.\n\nIt is the whole record of a sale on this side. The money itself is the provider's: `session` and `intent` are how a seller finds it there, and `account` says whose books it landed on. Nothing here is authoritative about the payment — the provider is — and the row exists so the seller knows what to put in the box and who to post it to.\n\n`items` is the cart as JSON in one text property, the way `home.first` is; a property is a scalar, and this is a list.\n\nEvery property is server-owned: the webhook writes it through the kernel's door (sell.ts `asApp`), and no page, member or visitor can say an order was paid (T-37881). Who may remove one is graph.ts `FLOORS`."
+    },
+    "refund_sent": {
+      "component": true,
+      "type": "object",
+      "readers": "editor",
+      "properties": {
+        "reference": {
+          "type": "string",
+          "stamped": true
+        },
+        "amount": {
+          "type": "number",
+          "stamped": true
+        }
+      }
+    },
+    "refund_failed": {
+      "component": true,
+      "type": "object",
+      "readers": "editor",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "reason": {
+          "type": "string",
+          "stamped": true
+        }
+      }
+    },
+    "refund_retry": {
+      "component": true,
+      "type": "object",
+      "readers": "editor",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      }
+    },
+    "refund_sale": {
+      "effect": true,
+      "created": [
+        "refund_request",
+        "refund_retry"
+      ],
+      "changed": [
+        "refund_retry.at"
+      ],
+      "target": ".refund_request",
+      "description": "Refund a merchant payment under its durable request identity."
+    },
+    "service_checkout": {
+      "component": true,
+      "type": "object",
+      "readers": "editor",
+      "properties": {
+        "snapshot": {
+          "type": "string",
+          "stamped": true
+        }
+      }
+    },
+    "service_quote": {
+      "component": true,
+      "type": "object",
+      "readers": "editor",
+      "properties": {
+        "snapshot": {
+          "type": "string",
+          "stamped": true
+        },
+        "hash": {
+          "type": "string",
+          "stamped": true
+        }
+      }
+    },
+    "order": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "readers": "editor",
+      "before": [
+        "doc"
+      ],
+      "properties": {
+        "session": {
+          "type": "string",
+          "stamped": true
+        },
+        "intent": {
+          "type": "string",
+          "stamped": true
+        },
+        "account": {
+          "type": "string",
+          "stamped": true
+        },
+        "items": {
+          "type": "string",
+          "stamped": true
+        },
+        "quote": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "document": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "revision": {
+          "type": "string",
+          "stamped": true
+        },
+        "specification": {
+          "type": "string",
+          "stamped": true
+        },
+        "buyer": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "source": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "quantity": {
+          "type": "number",
+          "stamped": true
+        },
+        "currency": {
+          "type": "string",
+          "stamped": true
+        },
+        "shipping_cents": {
+          "type": "number",
+          "stamped": true
+        },
+        "tax_cents": {
+          "type": "number",
+          "stamped": true
+        },
+        "total_cents": {
+          "type": "number",
+          "stamped": true
+        },
+        "fee_cents": {
+          "type": "number",
+          "stamped": true
+        },
+        "refunded_cents": {
+          "type": "number",
+          "stamped": true
+        },
+        "email": {
+          "type": "string",
+          "stamped": true
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "paid",
+            "partially_refunded",
+            "refunded",
+            "disputed",
+            "lost"
+          ],
+          "stamped": true
+        }
+      }
+    },
+    "sale_access": {
+      "component": true,
+      "type": "object",
+      "readers": "editor",
+      "floor": "editor",
+      "description": "Customer authority for private sale records and artifacts.",
+      "properties": {
+        "buyer": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      }
+    },
+    "sale_artifact": {
+      "component": true,
+      "type": "object",
+      "readers": "editor",
+      "floor": "editor",
+      "description": "A customer’s entitlement to one private sale artifact.",
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        }
+      }
+    },
+    "web": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "frozen_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      }
+    }
+  }
+}

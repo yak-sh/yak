@@ -166,6 +166,7 @@ export let directoryConfig: Config = {
         'tool',
         'call_ready',
         'call_woken',
+        'exception',
       ],
     },
     { use: '@yaks/git', words: ['ref', 'repository', 'commit'] },
@@ -183,7 +184,6 @@ export let directoryConfig: Config = {
       words: [
         'archetype',
         'retired',
-        'exception',
         'referenced',
         'error',
         'blob',
@@ -222,7 +222,8 @@ export let gitConfig: Config = {
     '@yaks/file',
     // This store's blob is a Git object's bytes, not an app upload.
     '@yaks/git',
-    { use: 'yak/app', words: ['archetype', 'retired', 'exception'] },
+    { use: '@yaks/tools', facets: ['vocab'], words: ['exception'] },
+    { use: 'yak/app', words: ['archetype', 'retired'] },
     { use: 'yak/trash', words: [] },
     { use: 'yak/meter', words: [] },
     { use: 'yak/lower', facets: ['graph'] },

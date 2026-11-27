@@ -24,6 +24,9 @@
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
+import operatorTalkJson from './vocab/operator-talk.vocab.json' with {
+  type: 'json',
+}
 
 let LINE =
   /^\.operatorTalk\.space=([^&]+)(?:&\.operatorTalk\.task=([^&]+))?&\*$/
@@ -42,25 +45,7 @@ export let talkAsked = (line: string): Talk | undefined => {
   return space ? { space, ...task ? { task } : {} } : undefined
 }
 
-export let operatorTalkWords: VocabDoc = {
-  $defs: {
-    operatorTalk: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: { type: 'string' },
-        task: { type: 'string' },
-        opened: { type: 'string' },
-        standing: { type: 'string' },
-        n: { type: 'integer' },
-        step: { type: 'object' },
-        typing: { type: 'string' },
-        writing: { type: 'string' },
-      },
-      required: ['space', 'opened', 'n', 'typing'],
-    },
-  },
-}
+export let operatorTalkWords: VocabDoc = operatorTalkJson as VocabDoc
 
 /** What a conversation's row says beside what its line asks. */
 export type Told = {

@@ -143,6 +143,7 @@ export let appConfig: Config = {
         'call_ready',
         'call_woken',
         'finding',
+        'exception',
       ],
     },
     '@yaks/hook',

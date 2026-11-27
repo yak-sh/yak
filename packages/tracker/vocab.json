@@ -648,6 +648,79 @@
           "death": "keep"
         }
       }
+    },
+    "bug": {
+      "component": true,
+      "type": "object",
+      "description": "A group of tracked errors with the same fault, scoped to an app.",
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The app, absent for platform and box bugs."
+        },
+        "fault": {
+          "type": "string",
+          "index": true,
+          "stamped": true,
+          "description": "The stable grouping key."
+        },
+        "culprit": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The top in-app code symbol."
+        },
+        "spot": {
+          "type": "string",
+          "stamped": true,
+          "description": "The unresolved file, line and function."
+        },
+        "first": {
+          "type": "string",
+          "stamped": true,
+          "description": "The first occurrence.",
+          "format": "date-time"
+        },
+        "last": {
+          "type": "string",
+          "stamped": true,
+          "description": "The latest occurrence.",
+          "format": "date-time"
+        },
+        "hits": {
+          "type": "number",
+          "stamped": true,
+          "description": "Occurrences grouped, including those retained only in the count."
+        },
+        "days": {
+          "type": "object",
+          "description": "Its hits by day, YYYY-MM-DD, for the last thirty days; a quiet day is absent."
+        },
+        "people": {
+          "type": "number",
+          "description": "Distinct people its retained occurrences reached, by their user_id tag.",
+          "computed": true
+        },
+        "account": {
+          "type": "string",
+          "enum": [
+            "person",
+            "test"
+          ],
+          "description": "person when any retained occurrence reached a person or a person's space, test when every one it names is a test account; absent when none names one.",
+          "computed": true
+        }
+      },
+      "kind": true,
+      "status": {
+        "archived": "archived",
+        "resolved": "resolved",
+        "default": "open"
+      }
     }
   }
 }

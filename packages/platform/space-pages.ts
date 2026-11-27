@@ -33,6 +33,9 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Domain, DomainOffer } from './domain-pages.ts'
+import spacePagesJson from './vocab/space-pages.vocab.json' with {
+  type: 'json',
+}
 
 /** A space as its Settings page says it. */
 export type SpaceSettings = {
@@ -120,84 +123,7 @@ export let offersQuery = (asked: string): string | undefined =>
     ? unhex(asked.slice(OFFERS.length))
     : undefined
 
-let strings = { type: 'string' }
-let nullable = { type: ['string', 'null'] }
-let flag = { type: 'boolean' }
-let rank = { type: 'integer' }
-let act = (properties: Record<string, unknown>, required: string[]) => ({
-  component: true,
-  type: 'object',
-  properties: { space: strings, said: strings, ...properties },
-  required: ['space', ...required],
-})
-
-export let spacePagesWords: VocabDoc = {
-  $defs: {
-    spaceSettings: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        slug: strings,
-        title: strings,
-        home: strings,
-        byline: flag,
-        paying: flag,
-        included: flag,
-        logo: nullable,
-      },
-      required: ['space'],
-    },
-    ownedDomain: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        rank,
-        name: strings,
-        destination: strings,
-        dns: strings,
-        certificate: strings,
-        renewal: strings,
-        chosen: flag,
-        canChoose: flag,
-        payment: { type: 'object' },
-        status: strings,
-        canPoint: flag,
-        canTransfer: flag,
-      },
-      required: ['space', 'rank', 'name', 'destination'],
-    },
-    binned: {
-      component: true,
-      type: 'object',
-      properties: {
-        space: strings,
-        rank,
-        item: strings,
-        kind: strings,
-        name: strings,
-        monthly: strings,
-      },
-      required: ['space', 'rank', 'item', 'kind', 'name'],
-    },
-    domainSearch: {
-      component: true,
-      type: 'object',
-      properties: {
-        asked: strings,
-        query: strings,
-        offers: { type: 'array', items: { type: 'object' } },
-        error: strings,
-      },
-      required: ['asked', 'query', 'offers'],
-    },
-    restoreBinned: act({ item: strings }, ['item']),
-    pointDomain: act({ name: strings, destination: strings }, ['name']),
-    chooseDomain: act({ name: strings }, ['name']),
-    offerDomain: act({ name: strings, to: strings }, ['name', 'to']),
-  },
-}
+export let spacePagesWords: VocabDoc = spacePagesJson as VocabDoc
 
 // A property the row has no word on is left out, as the graph keeps it.
 let drop = <T extends Record<string, unknown>>(o: T): T =>

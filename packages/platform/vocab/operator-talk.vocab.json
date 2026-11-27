@@ -1,0 +1,40 @@
+{
+  "$defs": {
+    "operatorTalk": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "opened": {
+          "type": "string"
+        },
+        "standing": {
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "step": {
+          "type": "object"
+        },
+        "typing": {
+          "type": "string"
+        },
+        "writing": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "opened",
+        "n",
+        "typing"
+      ]
+    }
+  }
+}

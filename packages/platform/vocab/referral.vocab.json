@@ -1,0 +1,208 @@
+{
+  "title": "directory-referral",
+  "reserved": false,
+  "$defs": {
+    "referral_code": {
+      "description": "The code a person's invite to yaks.app carries: whoever signs up sending it was invited by them.",
+      "component": true,
+      "type": "object",
+      "unique": [
+        [
+          "code"
+        ]
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "stamped": true
+        }
+      },
+      "$comment": "The code a person's invite carries (referral.ts `words`), on their own row, minted the first time their invite page opens. Unique, so a code names one person and the sign-up that sends it finds them."
+    },
+    "referral": {
+      "description": "One person who signed up for yaks.app through another's invite: who invited them.",
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "identity": [
+        "invitee"
+      ],
+      "properties": {
+        "inviter": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "invitee": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        }
+      },
+      "$comment": "One person who signed up through another's invite (referral.ts `credit`): who invited them. Its eid is derived from the invitee, so a person is invited once, by whoever's code their first message carried; its `created` stamp is when."
+    },
+    "rewarded": {
+      "description": "The free month of the Plus plan a referral gave its inviter's space when the invitee built their first app.",
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "space": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "subscription": {
+          "type": "string",
+          "stamped": true
+        }
+      },
+      "$comment": "The month of the Plus plan a referral gave its inviter once the invitee built their first app (referral.ts `rewarding`): when, to which space, the day that space's free time now runs through, and, for a space already paying, the provider's subscription whose next charge moved a month later. A mark, written once."
+    },
+    "comped": {
+      "description": "The Plus plan given to a space free, through `until`, with nothing billed for it.",
+      "component": true,
+      "type": "object",
+      "properties": {
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "$comment": "The Plus plan given to a space free, through `until`, where the payment provider bills it nothing (plans.ts `tierOf`): each reward adds a month after the later of now and the free time it already had."
+    },
+    "plan_trial": {
+      "description": "A space's 30-day trial of the Plus plan, whose clock stops while its owners are away.",
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "through": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "paused": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "resumed": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "subscribed": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "told": {
+          "type": "string",
+          "stamped": true
+        }
+      },
+      "$comment": "A space's trial of the Plus plan (D-476, @yaks/platform/trial): when it began and the day it ends, moved later by each time its owners were away; when its clock stopped, none while it runs; when it last started again; when the space subscribed during it, which gave the early credit once; and the notes its owners were sent, by key. Running, paused or ended is computed from these. The platform's to write."
+    },
+    "reward_referral": {
+      "effect": true,
+      "created": [
+        "app"
+      ],
+      "target": ".app !installed",
+      "description": "give an invitee's inviter a free month of the Plus plan when the invitee builds their first app",
+      "$comment": "An app made in a space whose owner was invited gives their inviter the month, the first time (facets/directory-effects.ts)."
+    },
+    "chat_dm": {
+      "component": true,
+      "type": "object",
+      "journal": false,
+      "index": [
+        [
+          "via",
+          "account"
+        ]
+      ],
+      "description": "A direct message to the platform bot, kept for up to seven days while it waits for its sender’s Operator. A receipt prevents a Gateway replay from taking it twice.",
+      "properties": {
+        "via": {
+          "type": "string",
+          "stamped": true
+        },
+        "account": {
+          "type": "string",
+          "stamped": true
+        },
+        "said": {
+          "type": "object",
+          "additionalProperties": true,
+          "stamped": true
+        },
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "space": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "index": true,
+          "stamped": true
+        }
+      }
+    },
+    "chat_dm_arrived": {
+      "effect": true,
+      "created": [
+        "chat_dm"
+      ],
+      "description": "carry a direct message to the sender’s Operator or offer to link their account"
+    },
+    "chat_linked": {
+      "effect": true,
+      "created": [
+        "connection"
+      ],
+      "changed": [
+        "connection.status"
+      ],
+      "target": ".connection.status=connected&.connection.owner.person",
+      "description": "re-read what a chat account's guest raised as its person's once they link it, so a request within their role goes on without waiting for anyone",
+      "$comment": "A person's own chat account linked: what its guest raised before is re-read as theirs in each space they sit in (chat.ts `linkedNow`)."
+    },
+    "support_reply": {
+      "effect": true,
+      "created": [
+        "comment",
+        "completed"
+      ],
+      "target": "(.comment !support|.conversation .report)",
+      "description": "carry the platform's answer in a support thread to the person's Updates and to the Operator conversation or connector agent it came from, until each takes it",
+      "$comment": "The platform's answer in a support thread, or its completion, carried to the thread's person (support-reply.ts)."
+    }
+  }
+}

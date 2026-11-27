@@ -1,0 +1,24 @@
+{
+  "$defs": {
+    "updateWaiting": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "space",
+        "slug",
+        "count"
+      ]
+    }
+  }
+}

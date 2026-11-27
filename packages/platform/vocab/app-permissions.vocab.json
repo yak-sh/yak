@@ -1,0 +1,39 @@
+{
+  "title": "app-permissions",
+  "$defs": {
+    "app_permission": {
+      "component": true,
+      "type": "object",
+      "description": "A person’s permission for one app and scope.",
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        },
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        },
+        "scope": {
+          "type": "string",
+          "stamped": true
+        }
+      }
+    },
+    "play_invite": {
+      "component": true,
+      "type": "object",
+      "description": "The link a friend can follow to play.",
+      "properties": {
+        "url": {
+          "type": "string",
+          "stamped": true
+        }
+      }
+    }
+  }
+}

@@ -4,13 +4,15 @@
 // package says. Which other packages a harness graph is made of is the `yak`
 // config's to say, never a list here.
 
-import type { VocabDoc } from '@yaks/vocab'
+import { pick, type VocabDoc } from '@yaks/vocab/runtime'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './package.json' with { type: 'json' }
 
-const { home, ...core } = doc.$defs
-export let homeDoc: VocabDoc = { title: 'session home', $defs: { home } }
-export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
+export let homeDoc: VocabDoc = pick(doc, ['home'], 'session home')
+export let harnessDoc: VocabDoc = pick(
+  doc,
+  Object.keys(doc.$defs).filter((name) => name != 'home'),
+)
 
 /** What this package is: its manifest's description, the one place it is
  * written, which a host stamps on each document here. */

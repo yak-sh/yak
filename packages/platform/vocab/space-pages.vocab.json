@@ -1,0 +1,231 @@
+{
+  "$defs": {
+    "spaceSettings": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "home": {
+          "type": "string"
+        },
+        "byline": {
+          "type": "boolean"
+        },
+        "paying": {
+          "type": "boolean"
+        },
+        "included": {
+          "type": "boolean"
+        },
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "space"
+      ]
+    },
+    "ownedDomain": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "dns": {
+          "type": "string"
+        },
+        "certificate": {
+          "type": "string"
+        },
+        "renewal": {
+          "type": "string"
+        },
+        "chosen": {
+          "type": "boolean"
+        },
+        "canChoose": {
+          "type": "boolean"
+        },
+        "payment": {
+          "type": "object"
+        },
+        "status": {
+          "type": "string"
+        },
+        "canPoint": {
+          "type": "boolean"
+        },
+        "canTransfer": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "space",
+        "rank",
+        "name",
+        "destination"
+      ]
+    },
+    "binned": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        },
+        "item": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "monthly": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "rank",
+        "item",
+        "kind",
+        "name"
+      ]
+    },
+    "domainSearch": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "asked": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "offers": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "asked",
+        "query",
+        "offers"
+      ]
+    },
+    "restoreBinned": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "item"
+      ]
+    },
+    "pointDomain": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "name"
+      ]
+    },
+    "chooseDomain": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "name"
+      ]
+    },
+    "offerDomain": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "name",
+        "to"
+      ]
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "title": "directory-use",
+  "reserved": false,
+  "$defs": {
+    "used": {
+      "description": "When a person or their app last used this entity.",
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "index": true,
+          "stamped": true
+        }
+      }
+    },
+    "changed": {
+      "description": "When a write last changed this app's store, to the hour; an install or a schema move is no change.",
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      }
+    },
+    "errored": {
+      "description": "When this app's code last reported an error, to the hour.",
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      }
+    },
+    "translated": {
+      "description": "A retired query spelling an app still sends, which the grammar translates, and the hour it last did.",
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "identity": [
+        "app",
+        "spelling"
+      ],
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "stamped": true
+        },
+        "spelling": {
+          "type": "string",
+          "stamped": true
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "$comment": "An app whose code still sends a query in a retired spelling, which the grammar translates for kept releases (T-122930). A translation goes only once no app has sent its spelling for a while (T-123000, M-37853)."
+    }
+  }
+}

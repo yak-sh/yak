@@ -20,6 +20,7 @@
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
+import agentsJson from './vocab/agents.vocab.json' with { type: 'json' }
 
 /** The agents named by who they are, not by what they called themselves. */
 export type Brand = 'chatgpt' | 'claude' | 'claude-code' | 'cursor'
@@ -113,34 +114,7 @@ export let DESTINATIONS: Partial<
   claude: { href: 'https://claude.ai/new', label: 'Open Claude' },
 }
 
-let strings = { type: 'string' }
-
-export let agentsWords: VocabDoc = {
-  $defs: {
-    agentsConnected: {
-      component: true,
-      type: 'object',
-      properties: { agents: { type: 'array', items: { type: 'object' } } },
-      required: ['agents'],
-    },
-    agentGrant: {
-      component: true,
-      type: 'object',
-      properties: {
-        id: strings,
-        client: strings,
-        created: { type: 'integer' },
-      },
-      required: ['id', 'client', 'created'],
-    },
-    disconnectAgent: {
-      component: true,
-      type: 'object',
-      properties: { agent: strings, said: strings },
-      required: ['agent'],
-    },
-  },
-}
+export let agentsWords: VocabDoc = agentsJson as VocabDoc
 
 /** The agents `person` connected, as their row. */
 export let agentsRow = (person: string, agents: Agent[]): Bundle => ({

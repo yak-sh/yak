@@ -1,0 +1,29 @@
+{
+  "$defs": {
+    "browser": {
+      "component": true,
+      "type": "object",
+      "description": "a platform-vouched writing browser, claimed on sign-in",
+      "properties": {
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the person who claimed this browser’s guest work"
+        }
+      }
+    },
+    "attribute_writes": {
+      "effect": true,
+      "created": [
+        "worked"
+      ],
+      "changed": [
+        "worked"
+      ],
+      "active": ".worked .edge.from.browser.by !completed",
+      "description": "fill the authors of a signed-in browser’s guest rows"
+    }
+  }
+}
