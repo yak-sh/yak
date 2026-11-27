@@ -167,7 +167,7 @@ let logged = (): {
   let store = storage(db, vocab)
   store.install()
   for (let s of ddl()) db.query(s)
-  let j = log({ rows: (s) => db.query(s) })
+  let j = log({ rows: (s) => db.query(s), vocab })
   let g = graph({ storage: store, vocab, plugins: [journal(j, vocab), fx] })
   return { g, fx, j }
 }

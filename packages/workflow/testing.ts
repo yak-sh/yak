@@ -75,7 +75,7 @@ export let process = (db: Db, defer = false) => {
     vocab,
     actor: { by: 'ada' },
     plugins: [
-      journal(log({ rows: (s) => db.query(s) }), vocab),
+      journal(log({ rows: (s) => db.query(s), vocab }), vocab),
       edges(vocab),
       wakes(),
       workflows(),

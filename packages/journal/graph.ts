@@ -48,11 +48,13 @@ import {
 let logs = new WeakMap<object, Log>()
 let feeds = new WeakMap<object, Feed>()
 
-/** What a log is bound to: the host's storage, and the read overrides
- * its store was opened with, so a value the store keeps in another form reads
- * back the way the graph reads it (./log.ts `LogOpts.derived`). */
+/** What a log is bound to: the host's storage, its vocabulary, which names
+ * what the log's rows record (./log.ts `LogOpts.vocab`), and the read
+ * overrides its store was opened with, so a value the store keeps in another
+ * form reads back the way the graph reads it (./log.ts `LogOpts.derived`). */
 export type Bound = {
   storage: { statements?: Statements }
+  vocab: Vocab
   derived?: Derived
   reader?: {
     statements?: { query: (statement: Stmt) => Row[] | Promise<Row[]> }
@@ -70,7 +72,14 @@ let rowsOf = (host: Bound): Rows => {
 export let logFor = (host: Bound): Log => {
   let found = logs.get(host)
   if (!found) {
-    logs.set(host, found = log({ rows: rowsOf(host), derived: host.derived }))
+    logs.set(
+      host,
+      found = log({
+        rows: rowsOf(host),
+        vocab: host.vocab,
+        derived: host.derived,
+      }),
+    )
   }
   return found
 }
@@ -160,7 +169,7 @@ export let required = (options?: Record<string, unknown>): boolean =>
  * recording what the host's vocabulary keeps as history, as its aspects say,
  * and the feed, carrying every commit to the other hosts. */
 export let plugins = (
-  host: Bound & { vocab: Vocab },
+  host: Bound,
   options?: Record<string, unknown>,
 ): Plugin[] => {
   let a = aspects(options)

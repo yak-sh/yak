@@ -8,7 +8,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
-import { derived, NOW, sync, wikiGraph } from './testing.ts'
+import { derived, NOW, sync, wiki, wikiGraph } from './testing.ts'
 import { journalDoc } from './vocab.ts'
 import { runs } from './tools.ts'
 
@@ -17,7 +17,7 @@ let fixture = () => {
   return {
     g,
     j,
-    tools: runs({ storage, derived }),
+    tools: runs({ storage, vocab: wiki, derived }),
     apply: (bundles: Bundle[]) => sync(g.apply(bundles)),
   }
 }
@@ -37,11 +37,12 @@ let comp = (b: Bundle, name: string) => b[name] as Comp
 
 test('the journal declares its tools and implements them', () => {
   assertEquals(
-    loadTools(journalDoc, runs({ storage: wikiGraph().storage })).map((t) => [
-      t.name,
-      t.noun,
-      t.verb,
-    ]),
+    loadTools(journalDoc, runs({ storage: wikiGraph().storage, vocab: wiki }))
+      .map((t) => [
+        t.name,
+        t.noun,
+        t.verb,
+      ]),
     [
       ['history', 'history', undefined],
       ['branch_new', 'branch', 'new'],

@@ -330,6 +330,7 @@ test('a content-addressed property is recorded by its address', () => {
     )
   let j = log({
     rows: (s) => db.query(s),
+    vocab: wiki,
     cas: {
       at: (comp, prop) => comp == 'page' && prop == 'text',
       put,

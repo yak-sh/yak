@@ -9,20 +9,24 @@
 // A reference column already holds what a component table holds, the
 // referent's integer id: `target`, `by` and `via` point into the entity table,
 // and `tx` at a transaction's own id. `comp` is the `_comp` entity describing
-// the component (@yaks/vocab), joined by its unique name; a graph that does not
+// the component (@yaks/vocab), the entity whose eid is the component's
+// identity, which is what the row recorded (./names.ts); a graph that does not
 // describe its vocabulary, or no longer describes a component the journal
-// names, has none to point at. A join rather than a lookup per change, so a
-// filter on it (a component's recent writes, `._change.comp=<_comp>`) starts
-// from that one `_comp` row and reads its changes through the index on
-// `component` (./log.ts `ddl`), where a lookup per change read all of them. A
-// change's `value` is its after-image, the properties it wrote as one object,
-// read from its field rows; a removal has none. A property the store keeps in
-// another form, the address @yaks/blob keeps in place of a body, reads back
-// through the store's `text` (@yaks/sql `Derived`), so a change says the text
-// a reader of the graph read; where that text is no longer kept, it says what
-// was recorded.
+// names, has none to point at. A row recorded by label before identities
+// points at the `_comp` row that label has now.
+//
+// `component` is the component's label, and a change's `value` its after-image
+// keyed by its properties' labels, as the vocabulary reads the identities the
+// rows recorded: a reader reads history in the words it reads the graph in,
+// and a renamed word's history under its new label. The value is the
+// properties the change wrote as one object, read from its field rows; a
+// removal has none. A property the store keeps in another form, the address
+// @yaks/blob keeps in place of a body, reads back through the store's `text`
+// (@yaks/sql `Derived`), so a change says the text a reader of the graph read;
+// where that text is no longer kept, it says what was recorded.
 
 import {
+  among,
   and,
   as,
   col,
@@ -43,6 +47,7 @@ import {
 } from '@yaks/sql/core'
 import type { Backings, Held } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
+import { type Names, names } from './names.ts'
 
 let jc = (c: string) => col(c, 'jc')
 let jf = (c: string) => col(c, 'jf')
@@ -62,9 +67,12 @@ let addressOf = (f: (c: string) => Expr) =>
   )
 let address = addressOf(jf)
 
+// Any of the names a row may hold for a word (./names.ts).
+let any = (names: string[]) => names.map((n) => lit(n))
+
 // One field's value as JSON: through its property's `text` where the store
 // keeps it in another form, and as recorded otherwise.
-let fieldOf = (derived: Derived): Expr => {
+let fieldOf = (derived: Derived, named: Names): Expr => {
   let recorded = fn('json', jf('value'))
   let texts = Object.entries(derived).flatMap(([key, d]) =>
     d.text ? [[key.split('.'), d.text] as const] : []
@@ -72,7 +80,10 @@ let fieldOf = (derived: Derived): Expr => {
   return texts.length
     ? when(
       texts.map(([[comp, prop], text]) => [
-        and(eq(jc('component'), lit(comp)), eq(jf('field'), lit(prop))),
+        and(
+          among(jc('component'), any(named.comps(comp))),
+          among(jf('field'), any(named.props(comp, prop))),
+        ),
         fn('coalesce', fn('json_quote', text(address)), recorded),
       ]),
       recorded,
@@ -82,36 +93,46 @@ let fieldOf = (derived: Derived): Expr => {
 
 // The `_comp` a change's component names, where the graph has one: its
 // column, and the join that reads it.
-let described = (vocab: Vocab) =>
+let described = (vocab: Vocab, named: Names) =>
   vocab.comp('_comp')
     ? {
-      comp: cc('entity'),
-      joins: [left(table('_comp', 'cc'), eq(cc('name'), jc('component')))],
+      comp: cc('id'),
+      joins: [
+        left(
+          table('entity', 'cc'),
+          eq(cc('eid'), named.rowOf(jc('component'))),
+        ),
+      ],
     }
     : { comp: lit(null), joins: [] }
 
-// One change's present after-images as one object. The field rows are read in
-// the order they were written, through their (change, ordinal) index.
-let valueOf = (derived: Derived) =>
+// One change's present after-images as one object, keyed by label. The field
+// rows are read in the order they were written, through their (change,
+// ordinal) index.
+let valueOf = (derived: Derived, named: Names) =>
   when([[
     eq(jc('operation'), lit('upsert')),
     sub(select({
-      cols: [fn('json_group_object', jf('field'), fieldOf(derived))],
+      cols: [fn(
+        'json_group_object',
+        named.labelOf(jf('field')),
+        fieldOf(derived, named),
+      )],
       from: table('journal_field', 'jf'),
       where: and(eq(jf('change'), jc('id')), eq(jf('present'), lit(1))),
     })),
   ]])
 
 // What each record tells of, by the record's own id (`id` for a change, `tx`
-// for a transaction): every change's entity and component. A scoped read sees
-// a change when it may see that component of that entity, and a transaction
-// when it may see one of its changes.
-let tells = (id: string) =>
+// for a transaction): every change's entity and component, by label. A scoped
+// read sees a change when it may see that component of that entity, and a
+// transaction when it may see one of its changes.
+let tells = (id: string, named: Names) =>
   select({
     cols: [
       as(jc(id), 'entity'),
       as(jc('entity'), 'about'),
-      as(jc('component'), 'component'),
+      as(named.labelOf(jc('component')), 'component'),
     ],
     from: table('journal_change', 'jc'),
   })
@@ -125,12 +146,12 @@ let tells = (id: string) =>
 // let a scoped get walk their history or build a bloom filter over the journal
 // before testing two owners. This single-table relation also folds into a
 // LEFT JOIN without materializing every owner's history.
-let held = (comp: string, props: Held[]): Select => {
+let heldIn = (named: Names) => (comp: string, props: Held[]): Select => {
   let jn = (c: string) => col(c, 'jn')
   let jl = (c: string) => col(c, 'jl')
   let owner = col('id', '__held')
   let ours = (c: (c: string) => Expr) =>
-    and(eq(c('entity'), owner), eq(c('component'), lit(comp)))
+    and(eq(c('entity'), owner), among(c('component'), any(named.comps(comp))))
   let newest = ({ name, ref }: Held) =>
     sub(select({
       cols: [when([[
@@ -148,7 +169,7 @@ let held = (comp: string, props: Held[]): Select => {
       ]])],
       from: table('journal_field', 'jl'),
       joins: [join(table('journal_change', 'jn'), eq(jn('id'), jl('change')))],
-      where: and(ours(jn), eq(jl('field'), lit(name))),
+      where: and(ours(jn), among(jl('field'), any(named.props(comp, name)))),
       order: [desc(jl('id'))],
       limit: lit(1),
     }))
@@ -192,11 +213,12 @@ let NONE: Derived = {}
 let registries = new WeakMap<Vocab, WeakMap<Derived, Backings>>()
 
 let registry = (vocab: Vocab, derived: Derived): Backings => {
-  let { comp, joins } = described(vocab)
-  let value = valueOf(derived)
+  let named = names(vocab)
+  let { comp, joins } = described(vocab, named)
+  let value = valueOf(derived, named)
   return {
     _tx: {
-      about: tells('tx'),
+      about: tells('tx', named),
       rows: select({
         cols: [
           as(col('id'), 'entity'),
@@ -211,15 +233,15 @@ let registry = (vocab: Vocab, derived: Derived): Backings => {
       }),
     },
     _change: {
-      about: tells('id'),
-      held,
+      about: tells('id', named),
+      held: heldIn(named),
       rows: select({
         cols: [
           as(jc('id'), 'entity'),
           as(jc('tx'), 'tx'),
           as(jc('entity'), 'target'),
           as(comp, 'comp'),
-          as(jc('component'), 'component'),
+          as(named.labelOf(jc('component')), 'component'),
           as(value, 'value'),
         ],
         from: table('journal_change', 'jc'),

@@ -67,7 +67,7 @@ let historic = (() => {
   db.install()
   for (let stmt of [...blobSchema(), ...ddl()]) driver.query(stmt)
   let bytes = sqliteBlobs(db.statements)
-  let records = log({ rows: (s) => driver.query(s), derived })
+  let records = log({ rows: (s) => driver.query(s), vocab: blog, derived })
   let g = graph({
     storage: db,
     vocab: blog,

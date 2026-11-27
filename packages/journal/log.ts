@@ -80,6 +80,7 @@ import {
 import type { Batch, Delta, Entry, Patch } from './batch.ts'
 import { dec, enc } from './value.ts'
 import { heldRows, heldSql } from './held.ts'
+import { names } from './names.ts'
 
 /** A statement, run for its rows: the whole of what the caller has to supply.
  * A write goes through it too — `insert … returning id` returns a row. */
@@ -128,6 +129,9 @@ export type Hit = {
 export type LogOpts = {
   /** the statement runner — the whole of what the caller supplies */
   rows: Rows
+  /** the store's vocabulary: its rows record each word by the identity this
+   * gives it, and read back the label it gives (./names.ts) */
+  vocab: Vocab
   /** the entity table: where an eid becomes the integer the tables store */
   spine?: { table?: string; id?: string; eid?: string }
   /** content-addressed properties, if the graph has any */
@@ -152,10 +156,13 @@ export type LogOpts = {
 // every cursor in the system holds. `tx.host` names the host that wrote it
 // (`LogOpts.host`).
 //
-// `change.operation` is `upsert` (the component is present; an empty one is an
-// upsert with no field rows) or `remove` (the component was removed, or the
-// entity was deleted when component = 'entity'). A row in the entity table
-// outlives the entity it names, so every change can keep pointing at one.
+// `change.component` and `field.field` name the component and the property by
+// identity, or by label where a word has none or the row predates identities
+// (./names.ts). `change.operation` is `upsert` (the component is present; an
+// empty one is an upsert with no field rows) or `remove` (the component was
+// removed, or the entity was deleted when the component is `entity`). A row in
+// the entity table outlives the entity it names, so every change can keep
+// pointing at one.
 //
 // `field.present = 1` records a written value, JSON-encoded, so a value that is
 // null stays distinct from a tombstone; `present = 0` is the tombstone written
@@ -339,6 +346,7 @@ export let log = (opts: LogOpts): Log => {
   let cas = opts.cas
   let derived = opts.derived ?? {}
   let host = opts.host ?? crypto.randomUUID()
+  let named = names(opts.vocab)
   let jt = (c: string) => col(c, 'jt')
   let jc = (c: string) => col(c, 'jc')
   let jf = (c: string) => col(c, 'jf')
@@ -465,11 +473,11 @@ export let log = (opts: LogOpts): Log => {
   let rebuild = (found: Row[]): Patch[] =>
     found.map((ch) => {
       let target = String(ch.eid)
-      let comp = String(ch.component)
+      let comp = named.label(String(ch.component))
       if (ch.operation == 'remove') return { target, comp, value: null }
       let value: Comp = {}
       for (let f of rows(fieldsOf(ch.id))) {
-        let prop = String(f.field)
+        let prop = named.label(String(f.field))
         value[prop] = f.text ?? read(comp, prop, dec(f.value))
       }
       return { target, comp, value }
@@ -541,31 +549,42 @@ export let log = (opts: LogOpts): Log => {
     // The properties a component still holds, newest after-image per property:
     // the field id is monotonic, so the highest-id row per property is the
     // latest in total order — and it reads this transaction's earlier upserts,
-    // which are uncommitted but visible on the same connection.
-    let held = (target: Eid, comp: string): Select =>
-      select({
-        cols: [col('field')],
-        from: {
-          t: 'from',
-          q: select({
-            cols: [
-              as(jf('field'), 'field'),
-              as(jf('present'), 'present'),
-              as(
-                over(fn('row_number'), [jf('field')], [desc(jf('id'))]),
-                'rn',
+    // which are uncommitted but visible on the same connection. A property
+    // recorded by its label before identities and by its identity since is
+    // one property, whose newest row says.
+    let held = (target: Eid, comp: string): string[] => {
+      let newest = new Map<string, Row>()
+      for (
+        let r of rows(select({
+          cols: [col('field'), col('present'), col('id')],
+          from: {
+            t: 'from',
+            q: select({
+              cols: [
+                as(jf('field'), 'field'),
+                as(jf('present'), 'present'),
+                as(jf('id'), 'id'),
+                as(
+                  over(fn('row_number'), [jf('field')], [desc(jf('id'))]),
+                  'rn',
+                ),
+              ],
+              from: table('journal_field', 'jf'),
+              joins: [ofChange],
+              where: and(
+                eq(jc('entity'), idOf(target)),
+                among(jc('component'), named.comps(comp).map(val)),
               ),
-            ],
-            from: table('journal_field', 'jf'),
-            joins: [ofChange],
-            where: and(
-              eq(jc('entity'), idOf(target)),
-              eq(jc('component'), val(comp)),
-            ),
-          }),
-        },
-        where: and(eq(col('rn'), lit(1)), eq(col('present'), lit(1))),
-      })
+            }),
+          },
+          where: eq(col('rn'), lit(1)),
+        }))
+      ) {
+        let prop = named.label(String(r.field))
+        if (num(r.id) > num(newest.get(prop)?.id)) newest.set(prop, r)
+      }
+      return [...newest].flatMap(([prop, r]) => num(r.present) ? [prop] : [])
+    }
     // Every change is one row of a JSON array, and every field another: a
     // transaction is a few statements however many components it wrote.
     let changes = new Map<number, number>()
@@ -573,7 +592,7 @@ export let log = (opts: LogOpts): Log => {
       let part of parts(applied.map(({ target, comp, value }, ordinal) => [
         ordinal,
         target,
-        comp,
+        named.comp(comp),
         value == null ? 'remove' : 'upsert',
       ]))
     ) {
@@ -607,20 +626,25 @@ export let log = (opts: LogOpts): Log => {
       let change = changes.get(ordinal)!
       let field = (
         i: number,
-        name: string,
+        prop: string,
         v: string | null,
         ref: number | null,
       ) =>
-        fields.push([change, i, name, v == null && ref == null ? 0 : 1, v, ref])
+        fields.push([
+          change,
+          i,
+          named.prop(comp, prop),
+          v == null && ref == null ? 0 : 1,
+          v,
+          ref,
+        ])
       if (value == null) {
         // A removal tombstones every property the component still had, so
         // property history stays self-contained across a removal and a later
         // recreation. What it had may be this transaction's own earlier
         // after-images, so those are written first.
         flush()
-        rows(held(target, comp)).forEach((f, i) =>
-          field(i, String(f.field), null, null)
-        )
+        held(target, comp).forEach((prop, i) => field(i, prop, null, null))
         return
       }
       // An upsert records one present after-image per property, JSON-encoded so
@@ -860,8 +884,8 @@ export let log = (opts: LogOpts): Log => {
       from: table('journal_field', 'jf'),
       joins: [ofChange],
       where: and(
-        eq(jc('component'), val(comp)),
-        eq(jf('field'), val(prop)),
+        among(jc('component'), named.comps(comp).map(val)),
+        among(jf('field'), named.props(comp, prop).map(val)),
         eq(jf('present'), lit(1)),
         eq(jc('operation'), lit('upsert')),
       ),
@@ -888,7 +912,7 @@ export let log = (opts: LogOpts): Log => {
 
   /** The changes the log holds per component: one pass over the index on
    * `component`, reading no change row. A deletion counts under `entity`. */
-  let held = (): Record<string, number> => heldRows(rows(heldSql()))
+  let held = (): Record<string, number> => heldRows(rows(heldSql()), opts.vocab)
 
   /** Has anything touched this entity since `seq`? The coarse "something
    * changed" question an undo asks where there is no property to put a
@@ -935,8 +959,8 @@ export let log = (opts: LogOpts): Log => {
     })).map((r) => ({
       field: num(r.id),
       target: str(r.target),
-      comp: String(r.comp),
-      prop: String(r.field),
+      comp: named.label(String(r.comp)),
+      prop: named.label(String(r.field)),
       seq: num(r.seq),
       at: String(r.at),
       value: r.text != null ? String(r.text) : dec(r.value),

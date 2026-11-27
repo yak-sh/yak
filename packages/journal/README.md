@@ -40,6 +40,15 @@ for the fields known to the journal, keeping their history continuous across
 removal and recreation. Previous values are reconstructed from the entity's own
 indexed history rather than stored alongside each new value.
 
+A change records its component by the component's identity, the `$id` its
+vocabulary gives it (@yaks/vocab), and each value by its property's identity; a
+word without one is recorded by its label. Every reader gets labels back, as the
+vocabulary reads those identities now, so a renamed word's history reads under
+its new label. Rows written before identities name each word by its label and
+read the same way, until every store's journal is rewritten to identities. The
+log is given the vocabulary for this: `log({ rows, vocab })`, or the host's
+through `@yaks/journal/graph`.
+
 A property the store keeps in another form, such as the address @yaks/blob keeps
 in place of a body, is recorded as stored and read back through the store's read
 overrides (`log({ derived })`; `@yaks/journal/graph` binds the host's). History
@@ -96,7 +105,7 @@ let driver = open(':memory:')
 let store = storage(driver, vocab)
 store.install()
 for (let s of ddl()) driver.query(s)
-let j = logFor({ storage: { statements: statements(driver) } })
+let j = logFor({ storage: { statements: statements(driver) }, vocab })
 let g = graph({ storage: store, vocab, plugins: [journal(j, vocab)] })
 
 g.apply([
@@ -118,13 +127,14 @@ never written:
 | `_change` | `tx`, `target`, `comp`, `component`, `value` | row of `journal_change`: one operation |
 
 `_change.value` is the operation's after-image, the properties it wrote as one
-object; it is absent where the operation removed the component. `comp` refers to
-the `_comp` entity describing the component (@yaks/vocab), found by its name,
-and a deletion is the change whose `comp` is `entity`'s; where the graph
-describes no such component (no @yaks/vocab, or a component since renamed) a
-change has no `comp`. `component` is the component's name whatever the graph
-describes, `entity` for a deletion. `tx` refers to the `_tx` entity, and
-`target`, `by` and `via` to entities of the graph.
+object, keyed by the properties' labels; it is absent where the operation
+removed the component. `comp` refers to the `_comp` entity describing the
+component (@yaks/vocab), the one whose eid is the component's identity, and a
+deletion is the change whose `comp` is `entity`'s; where the graph describes no
+such component (no @yaks/vocab, or a component since removed) a change has no
+`comp`. `component` is the component's label whatever the graph describes,
+`entity` for a deletion. `tx` refers to the `_tx` entity, and `target`, `by` and
+`via` to entities of the graph.
 
 A scoped read (a person's on yaks.app, or the API's on the box) sees a change
 when its scope admits the change's target and the component it wrote, and a
@@ -316,7 +326,7 @@ let driver = open(':memory:')
 let store = storage(driver, vocab)
 store.install()
 for (let s of ddl()) driver.query(s)
-let j = logFor({ storage: { statements: statements(driver) } })
+let j = logFor({ storage: { statements: statements(driver) }, vocab })
 let g = graph({ storage: store, vocab, plugins: [journal(j, vocab)] })
 
 g.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])

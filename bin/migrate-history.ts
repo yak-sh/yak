@@ -403,7 +403,7 @@ say(
 // differ, a write the journal never saw explains it when the journal's newest
 // account of that component differs from the live one too.
 if (checks) {
-  let journal = log({ rows: (s) => d.query(s), derived: h.derived })
+  let journal = log({ rows: (s) => d.query(s), vocab, derived: h.derived })
   let sample = d.query(select({
     cols: [
       as(col('eid', 'e'), 'eid'),

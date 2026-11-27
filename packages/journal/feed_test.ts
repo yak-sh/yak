@@ -249,7 +249,7 @@ test('a store an older journal made takes the host once it is opened again', () 
 })
 
 test('a journal requires storage that offers statements', () => {
-  let host = { storage: {} }
+  let host = { storage: {}, vocab: wiki }
   assertThrows(
     () => logFor(host),
     Error,
@@ -270,6 +270,7 @@ let looping = async (each: Each, reader?: Bound['reader']) => {
   let releases: (() => void | Promise<void>)[] = []
   let host = {
     storage: { statements: statements(db), get: () => [] },
+    vocab: wiki,
     reader,
     stopping: stopping.signal,
     report: (e: unknown) => void told.push(e),
@@ -314,6 +315,7 @@ let threaded = (() => {
         throw new Error('get on writer')
       },
     },
+    vocab: wiki,
     reader: {
       statements: {
         query: (s: Parameters<typeof db.query>[0]) =>

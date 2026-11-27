@@ -127,7 +127,7 @@ export let service = async (
   let bound = host.storage?.statements ? host as Bound : undefined
   let read = host.reader?.statements?.query
   let held = read
-    ? async () => heldRows(await read(heldSql()))
+    ? async () => heldRows(await read(heldSql()), host.graph.vocab)
     : bound && (() => logFor(bound).held())
   for (;;) {
     try {

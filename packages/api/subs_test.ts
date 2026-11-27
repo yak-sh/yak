@@ -868,7 +868,7 @@ test('a subscription to an entity’s history hears each change', () => {
   let store = storage(sql, vocab, { backed: backed(vocab) })
   store.install()
   for (let s of ddl()) sql.query(s)
-  let j = journal(log({ rows: (s) => sql.query(s) }), vocab)
+  let j = journal(log({ rows: (s) => sql.query(s), vocab }), vocab)
   let g = graph({ storage: store, vocab, plugins: [j] })
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(g)

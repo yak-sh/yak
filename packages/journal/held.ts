@@ -1,6 +1,8 @@
 // Count retained changes by component on the covering index. The daily file
 // measurement can run this scan through its asynchronous statement reader.
 import { as, col, fn, lit, type Row, select, type Stmt, table } from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
+import { names } from './names.ts'
 
 export let heldSql = (): Stmt =>
   select({
@@ -9,5 +11,14 @@ export let heldSql = (): Stmt =>
     group: [col('component')],
   })
 
-export let heldRows = (rows: Row[]): Record<string, number> =>
-  Object.fromEntries(rows.map((r) => [String(r.c), Number(r.n ?? 0)]))
+/** The counts by each component's label, where rows recorded it by label or
+ * by identity (./names.ts). */
+export let heldRows = (rows: Row[], vocab: Vocab): Record<string, number> => {
+  let { label } = names(vocab)
+  let held: Record<string, number> = {}
+  for (let r of rows) {
+    let comp = label(String(r.c))
+    held[comp] = (held[comp] ?? 0) + Number(r.n ?? 0)
+  }
+  return held
+}

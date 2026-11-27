@@ -305,7 +305,7 @@ let run = async () => {
       plugins: [
         archetypes(),
         journal(
-          log({ rows: (s) => db!.query(s), derived: loaded.derived }),
+          log({ rows: (s) => db!.query(s), vocab, derived: loaded.derived }),
           vocab,
         ),
       ],

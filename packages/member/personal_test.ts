@@ -140,7 +140,7 @@ for (let s of ddl()) db.query(s)
 let kept = fixture(graph({
   vocab: logged,
   storage: store,
-  plugins: [journal(log({ rows: (s) => db.query(s) }), logged)],
+  plugins: [journal(log({ rows: (s) => db.query(s), vocab: logged }), logged)],
 }))
 let friend = (g: typeof read, person: string) =>
   (sync(g.answer([{

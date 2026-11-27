@@ -145,7 +145,7 @@ export let actors = (g: Graph) =>
  * actors (`ada`, `bob`, `cli`) are already entities. */
 export let bareLog = (): Log => {
   let db = preparedDriver(empty)
-  return log({ rows: (s) => db.query(s) })
+  return log({ rows: (s) => db.query(s), vocab: wiki })
 }
 
 /** An embedded database with the wiki's tables, the journal's and the feed's,
@@ -171,7 +171,7 @@ export let wikiLog = (components?: string[]): {
   let texts = blobs(wiki, sqliteBlobs(statements(db)))
   let held = { statements: statements(db) }
   let host = () => {
-    let bound = { storage: held, derived }
+    let bound = { storage: held, vocab: wiki, derived }
     let j = logFor(bound)
     let f = feedFor(bound)
     let g = (plugins: Options['plugins'] = []) =>

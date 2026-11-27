@@ -31,7 +31,10 @@ let one = (g: ReturnType<typeof shopGraph>, q: string) =>
 
 let journalSchema = snapshot(shop, {}, ddl())
 let journalStore = preparedStore(shop, {}, journalSchema)
-let j = log({ rows: (stmt) => journalStore.statements.query(stmt) })
+let j = log({
+  rows: (stmt) => journalStore.statements.query(stmt),
+  vocab: shop,
+})
 let missingGraph = graph({
   storage: journalStore,
   vocab: shop,

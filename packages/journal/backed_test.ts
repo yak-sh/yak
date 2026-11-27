@@ -50,7 +50,9 @@ let build = (
     storage: store,
     vocab,
     plugins: [
-      journal(log({ rows: (s) => db.query(s) }), vocab, { now: () => NOW }),
+      journal(log({ rows: (s) => db.query(s), vocab }), vocab, {
+        now: () => NOW,
+      }),
       blobs(vocab, sqliteBlobs(statements(db))),
     ],
   })

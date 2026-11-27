@@ -71,7 +71,12 @@ let prepared = (db?: ReturnType<typeof open>) => {
   g.install()
   if (db) {
     for (let stmt of ddl()) db.query(stmt)
-    g.use(journal(log({ rows: (stmt) => db.query(stmt) }), applyVocab))
+    g.use(
+      journal(
+        log({ rows: (stmt) => db.query(stmt), vocab: applyVocab }),
+        applyVocab,
+      ),
+    )
   }
   return { g, store }
 }
