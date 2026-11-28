@@ -17,7 +17,7 @@ import { directoryOf, seeding, stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
 import { meta } from './meta.ts'
 import { invokePackage } from './package-tools.ts'
-import { phoneOf, textable } from './phones.ts'
+import { phoneNamed, phoneOf, textable } from './phones.ts'
 import { keyed } from './platform-keys.ts'
 import { connector, fresh as kernel, signIn } from './probe.ts'
 import type { Env } from './env.ts'
@@ -59,6 +59,21 @@ let given = async (
 
 // A fresh env, as a new isolate is handed one.
 let fresh = (vars: object = {}) => ({ ...p.env, ...vars })
+
+test('looking for an unknown phone does not read provider credentials', async () => {
+  let env = fresh()
+  let { STORE } = env
+  let reads = 0
+  env.STORE = {
+    ...STORE,
+    get: (id) => {
+      reads++
+      return STORE.get(id)
+    },
+  }
+  assertEquals(await phoneNamed(env, 'unconfigured'), undefined)
+  assertEquals(reads, 0)
+})
 
 test('a Worker secret answers until its connection is given, and the connection over it after', async () => {
   let env = fresh({ ANTHROPIC_API_KEY: 'secret' })

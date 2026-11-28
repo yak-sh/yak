@@ -35,13 +35,16 @@ export let ownPhones = async (env: Env): Promise<Record<string, Own>> =>
     ),
   )
 
-/** The phone config.ts `phoneConfig` lends as `via`, where one does. */
+/** The phone config.ts `phoneConfig` lends as `via`, where one does.
+ * Routing checks names before loading keys for a provider. */
 export let phoneNamed = async (
   env: Env,
   via: string,
 ): Promise<Phone | undefined> => {
-  let all = await phones(env)
-  return Object.hasOwn(all, via) ? all[via] : undefined
+  let all = await configured(keysOn(env))
+  if (!Object.hasOwn(all, via)) return undefined
+  await keyed(env)
+  return all[via]
 }
 
 /**
