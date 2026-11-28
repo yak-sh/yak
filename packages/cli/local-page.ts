@@ -24,6 +24,10 @@ let FILE_URLS = {
   },
 }
 
+// React and the packages like it choose their production build, without
+// development checks, by this.
+let PRODUCTION = { 'process.env.NODE_ENV': '"production"' }
+
 let BROWSER = {
   bundle: true,
   format: 'esm',
@@ -32,6 +36,7 @@ let BROWSER = {
   jsx: 'automatic',
   jsxImportSource: 'react',
   minify: true,
+  define: PRODUCTION,
   write: false,
   metafile: true,
   logLevel: 'silent',
