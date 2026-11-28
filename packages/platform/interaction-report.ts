@@ -160,6 +160,25 @@ type Reporting = {
   failed: (error: unknown) => void
 }
 
+// Grade direct cold opens from the document request. The timing rows still
+// count everything since navigation began. Redirects and service workers
+// can do platform work before the final document request.
+let requestOffset = (open: Open): number => {
+  let nav = open.navigation
+  if (
+    open.source != 'cold' || open.controlled !== false ||
+    nav?.workerStart !== 0 || nav.redirectCount !== 0 ||
+    nav.redirectStart || nav.redirectEnd
+  ) return 0
+  let { requestStart, responseStart } = nav
+  let first = open.paint ?? open.usable
+  return requestStart && responseStart != null && first != null &&
+      (nav.fetchStart ?? 0) <= requestStart && requestStart <= responseStart &&
+      responseStart <= first
+    ? requestStart
+    : 0
+}
+
 // An open begun hidden (a tab opened behind the one in front) paints only
 // once it is shown: its times are how long it stood unseen, which nobody
 // waited for, so they are counted but never judged against a budget.
@@ -169,8 +188,11 @@ let slowOpen = (
 ): Bundle[] => {
   let open = seen.open
   if (!open || !opened || open.unseen) return []
-  return openMilestones(open).flatMap(({ name, ms, budget }) => {
-    if (ms == null || ms <= budget) return []
+  let offset = requestOffset(open)
+  return openMilestones(open).flatMap(({ name, ms: elapsed, budget }) => {
+    if (elapsed == null) return []
+    let ms = elapsed - offset
+    if (ms <= budget) return []
     let kind = openName(opened.page, open, name)
     return capture({
       name: 'Slow interaction',
@@ -190,6 +212,7 @@ let slowOpen = (
         source: open.source,
         device: open.device,
         ms,
+        ...offset ? { elapsed } : {},
         budget,
         ...open.server == null ? {} : { server: open.server },
         ...open.gateway == null ? {} : { gateway: open.gateway },

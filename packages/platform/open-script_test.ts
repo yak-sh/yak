@@ -25,6 +25,7 @@ let navigation = {
 let browser = (
   href = 'https://yaks.app/ada',
   origin = new URL(href).origin,
+  nav = navigation,
 ) => {
   let document = Object.assign(new EventTarget(), {
     readyState: 'loading',
@@ -38,7 +39,7 @@ let browser = (
   let performance = {
     timeOrigin: 1795626000000,
     now: () => clock,
-    getEntriesByType: () => [navigation],
+    getEntriesByType: () => [nav],
     getEntriesByName: (name: string) =>
       entries.has(name) ? [entries.get(name)] : [],
     mark: (name: string, { startTime = clock } = {}) =>
@@ -201,6 +202,89 @@ let reported = async (
   })
   return rows
 }
+
+let coldHome = (
+  responseStart: number,
+  paint: number,
+  usable: number,
+  changes: Partial<typeof navigation> = {},
+) => {
+  let b = browser('https://yaks.app/', undefined, {
+    workerStart: 0,
+    fetchStart: 5296.8,
+    requestStart: 6375.8,
+    responseStart,
+    redirectCount: 0,
+    redirectStart: 0,
+    redirectEnd: 0,
+    domainLookupStart: 5296.8,
+    domainLookupEnd: 5296.8,
+    connectStart: 5308.8,
+    secureConnectionStart: 6307.3,
+    connectEnd: 6375.6,
+    responseEnd: responseStart + 377,
+    ...changes,
+  })
+  b.run()
+  b.entries.set('yak-usable', { startTime: usable })
+  b.parsed(usable - 0.5)
+  b.frame(usable + 1, paint)
+  return b
+}
+
+let incidents = (rows: Bundle[]) =>
+  rows.flatMap((row) =>
+    row.error
+      ? [
+        row.error as {
+          level: string
+          tags: { ms: number; elapsed?: number; server: number }
+        },
+      ]
+      : []
+  )
+
+test('a direct cold Home open keeps the full time but grades from the request', async () => {
+  let rows = await reported(coldHome(7182.8, 9452, 9824.1), { page: 'home' })
+  let timing = rows.filter((row) => row.timing) as TimingRow[]
+  equal(timing.map((row) => Math.round(row.timing.total)), [9452, 9824])
+  equal(
+    incidents(rows).map(({ level, tags }) => [
+      level,
+      Math.round(tags.ms),
+      tags.elapsed,
+      Math.round(tags.server),
+    ]),
+    [['warning', 3076, 9452, 807]],
+  )
+})
+
+test('a cold Home open still files slow responses after the request starts', async () => {
+  let rows = await reported(coldHome(11045.8, 12100, 14000), { page: 'home' })
+  equal(
+    incidents(rows).map(({ level, tags }) => [level, Math.round(tags.ms)]),
+    [
+      ['error', 5724],
+      ['error', 7624],
+    ],
+  )
+})
+
+test('a cold open with a redirect, worker, or missing request time keeps the full budget interval', async () => {
+  let changes = [
+    { redirectCount: 1 },
+    { workerStart: 100 },
+    { requestStart: 0 },
+  ]
+  for (let change of changes) {
+    let b = coldHome(7182.8, 9452, 9824.1, change)
+    let rows = await reported(b, { page: 'home' })
+    equal(incidents(rows).map(({ level, tags }) => [level, tags.ms]), [
+      ['error', 9452],
+      ['error', 9824.1],
+    ])
+  }
+})
 
 test('a cold document opened from a notification records paint, readiness and the network wait once', () => {
   let b = browser('https://yaks.app/ada?_yak_open=push#row-123')
