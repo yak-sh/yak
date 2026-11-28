@@ -540,6 +540,22 @@ let askedOf = async (store: Store, entries: Bundle[]): Promise<Asked> => {
   }
 }
 
+// Each call that began among `entries`, which its conversation draws where
+// it began (@yaks/platform/operator-docs `callsOf`). The chat platforms
+// that name a call's line load only for lines holding one.
+let drawnCalls = async (store: Store, entries: Bundle[]) => {
+  if (!entries.some((b) => comp(b, 'operator_call')?.began)) return {}
+  let [{ callsOf }, { PLATFORMS }] = await Promise.all([
+    import('@yaks/platform/operator-docs'),
+    import('./chat.ts'),
+  ])
+  return callsOf(
+    store.g,
+    entries,
+    (via) => PLATFORMS.get(via)?.title ?? 'Phone',
+  )
+}
+
 // What a conversation draws beside its sessions' transcripts.
 let seenOf = async (
   store: Store,
@@ -555,6 +571,7 @@ let seenOf = async (
       ...helpers.flatMap((h) => h.entries),
     ]),
     files: await drawnFiles(store, entries),
+    calls: await drawnCalls(store, entries),
     // A fault stopped it, and the fault's fix takes it up again
     // (operator-rerun.ts).
     ...sessions.some((b) => b.stalled) ? { stalled: true } : {},
@@ -1599,6 +1616,7 @@ export let frameOf = async (
         ...await roomsBy(store, changed),
         ...await askedOf(store, withHelpers(entries, helpers)),
         files: await drawnFiles(store, changed),
+        calls: await drawnCalls(store, changed),
         called,
         opens,
         ...naming,

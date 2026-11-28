@@ -68,6 +68,7 @@ import {
 } from '@yaks/session/conversation'
 import { going, type HelperLine, Helping, Work } from './operator-aside.ts'
 import type { Read } from './operator-files.ts'
+import type { Called } from '@yaks/platform/operator-docs'
 import { type IconName, icons } from './icons.ts'
 import { PART } from '@yaks/persona/part'
 import {
@@ -567,6 +568,9 @@ export type Seen = {
   mentions?: string
   /** each line's files, by its eid */
   files?: Record<string, Kept>
+  /** each call, by the entry it began at (@yaks/platform/operator-docs
+   * `callsOf`) */
+  calls?: Record<string, Called>
   /** what models were told drawn whole, for a page with no script to
    * fetch it as it opens */
   whole?: boolean
@@ -772,6 +776,7 @@ let drawing = (
     called = 'the Operator',
     opens,
     files,
+    calls: began,
     whole,
     stalled,
   }: Seen = {},
@@ -790,6 +795,7 @@ let drawing = (
     who: 'the Operator',
     opens,
     files,
+    calls: began,
     roomNames,
     ...stalled ? { stalled } : {},
   }
@@ -1011,6 +1017,7 @@ type Heard = Beside & {
   opens?: string
   told?: Map<string, Told>
   files?: Record<string, Kept>
+  calls?: Record<string, Called>
   roomNames?: Record<string, string>
 }
 
@@ -1036,12 +1043,40 @@ let contact = (b: Bundle): Said => ({
     : contactCard(said(b)),
 })
 
+// How long a call went on, as its line says it.
+let lasted = (seconds: number) =>
+  seconds < 60 ? 'under a minute' : `${Math.round(seconds / 60)} min`
+
+// Where a call began: a line saying what it was and how long it went on,
+// which opens the notes made of it (@yaks/platform/operator-docs), each a
+// doc of its own.
+let callLine = ({ via, seconds, notes }: Called): Said => {
+  let name = `${via ? `${via} call` : 'Call'}, ${lasted(seconds)}${
+    notes.length ? ' · Notes' : ''
+  }`
+  return {
+    node: notes.length
+      ? step(
+        name,
+        '',
+        ...notes.flatMap((n) => [
+          h(More.Label, {}, n.title),
+          written(n.body),
+        ]),
+      )
+      : h(Notice, {}, name),
+    text: name,
+  }
+}
+
 // A line of a call its talking model hears and speaks: theirs, or its own
-// (old rows, before its own were outputs). Where the call began, and that
-// notes of it were asked for, are the model's to read; what it asked of the
-// Operator is the person's words.
+// (old rows, before its own were outputs). Where the call began is its line
+// (`callLine`); that notes of it were asked for is the model's to read; what
+// it asked of the Operator is the person's words.
 let onCall = (b: Bundle, heard: Heard): Said | null | undefined => {
   let called = comp(b, 'operator_call')!
+  let call = called.began ? heard.calls?.[b.entity.eid] : undefined
+  if (call) return callLine(call)
   if (called.began || called.notes) return null
   if (!b.notice || !said(b)) return undefined
   return called.said
@@ -1312,6 +1347,8 @@ export type Lines = {
   ids?: Record<string, string>
   /** the files of the lines they read, by eid */
   files?: Record<string, Kept>
+  /** the calls that began at the lines they read, by eid */
+  calls?: Record<string, Called>
   /** that a fault stopped it, and its fix takes it up again */
   stalled?: boolean
 }
@@ -1389,6 +1426,7 @@ export let wire = (
   let said = JSON.stringify([read, helpers])
   let ids = Object.entries(seen.ids ?? {}).filter(([eid]) => said.includes(eid))
   let files = Object.entries(seen.files ?? {}).filter(([eid]) => used.has(eid))
+  let calls = Object.entries(seen.calls ?? {}).filter(([eid]) => used.has(eid))
   return {
     lines: drawn.map(({ id, uses, of, live }) => ({
       id,
@@ -1421,6 +1459,7 @@ export let wire = (
     ...seen.opens ? { opens: seen.opens } : {},
     ...ids.length ? { ids: Object.fromEntries(ids) } : {},
     ...files.length ? { files: Object.fromEntries(files) } : {},
+    ...calls.length ? { calls: Object.fromEntries(calls) } : {},
     ...seen.stalled ? { stalled: true } : {},
   }
 }

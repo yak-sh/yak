@@ -22,6 +22,8 @@ import { notesOf } from './operator-calls.ts'
 import { notification, updatesOf } from './operator-updates.ts'
 import { seenBy } from './operator-access.ts'
 import { rootOf } from './operator-root.ts'
+import { conversationOf } from './operator-host.ts'
+import { parseHTML } from 'linkedom'
 
 let NOTES = '- The barn opens Friday.'
 
@@ -58,9 +60,11 @@ let comp = (b: Bundle | undefined, name: string) =>
 test("a phone call's notes are a doc of the caller's, found by their search, which their Update points to", async () => {
   let { store, operator, space, person } = await fixture()
   let ticket = { person, via: 'telnyx', to: '+15550100' }
-  let note = (text: string, o: { began?: boolean; said?: boolean }) =>
-    operator.note({ person }, space, text, { call: 'c1', ...o })
-  await note('', { began: true })
+  let note = (
+    text: string,
+    o: { began?: boolean; said?: boolean; via?: string },
+  ) => operator.note({ person }, space, text, { call: 'c1', ...o })
+  await note('', { began: true, via: 'telnyx' })
   await note('The barn opens Friday.', {})
   equal(await notesOf(store, space, ticket, 'c1', true), true)
   await drain(store)
@@ -73,7 +77,11 @@ test("a phone call's notes are a doc of the caller's, found by their search, whi
   let [began] = await store.g.get([
     String(comp(asked, 'operator_request')?.about),
   ])
-  equal(comp(began, 'operator_call'), { call: 'c1', began: true })
+  equal(comp(began, 'operator_call'), {
+    call: 'c1',
+    began: true,
+    via: 'telnyx',
+  })
   let find = async (who: string) =>
     (await textSearch(seenBy(store, { person: who, member: true }))(
       'barn Friday',
@@ -88,6 +96,19 @@ test("a phone call's notes are a doc of the caller's, found by their search, whi
       doc.entity.eid,
       { title: 'Notes of your call', body: NOTES },
     ]],
+  )
+  // Their conversation shows the call where it began, opening its notes.
+  let { html } = await conversationOf(store, '/at', rootOf(space.eid, person))
+  let { document } = parseHTML(`<div>${html}</div>`)
+  let line = [...document.querySelectorAll('details')].find((d) =>
+    d.querySelector('summary')?.textContent?.includes('call')
+  )
+  equal(
+    [
+      line?.querySelector('summary')?.textContent?.trim(),
+      line?.textContent?.includes('The barn opens Friday.'),
+    ],
+    ['Phone call, under a minute · Notes', true],
   )
   // Searching their Updates reads the notes it points to.
   let found = async (q: string) =>

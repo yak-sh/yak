@@ -13,6 +13,9 @@
 //
 // Notes kept before were only an Update's words: `madeBackfill` moves each
 // into its doc in bounded alarm batches, and points the Update to it.
+//
+// A call shows in its conversation where it began, as a line naming how
+// long it went on, which opens its notes (`callsOf`).
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import { derivedEid } from '@yaks/graph/identity'
@@ -131,4 +134,64 @@ export let madeBackfill = async (store: {
   if (requests.length < BATCH) marks.set(MADE_DOCS, 'done')
   else marks.set(MADE_DOCS, String(comp(last, 'created')!.at))
   return requests.length == BATCH
+}
+
+/** A call as its conversation draws it, where it began: the line it came on
+ * as a person names it, how long it went on, and the docs made of it. */
+export type Called = {
+  /** "Discord", "Phone"; none for a call kept before lines named theirs */
+  via?: string
+  seconds: number
+  notes: { title: string; body: string }[]
+}
+
+/** The calls that began among `entries`, by the entry each began at, read
+ * from the graph: every line kept of each call, the notes requests about
+ * where it began, and the docs made from those. `title` names a line a
+ * call came on (`operator_call.via`). */
+export let callsOf = async (
+  g: Pick<Graph, 'read'>,
+  entries: Bundle[],
+  title: (via: string) => string,
+): Promise<Record<string, Called>> => {
+  let began = entries.filter((b) => comp(b, 'operator_call')?.began)
+  if (!began.length) return {}
+  let ids = began.map((b) => b.entity.eid)
+  let calls = began.map((b) => String(comp(b, 'operator_call')!.call))
+  let [lines, asked] = await Promise.all([
+    g.read(
+      line`.operator_call.call=${calls}&.fields=operator_call.call,created.at`,
+    ),
+    g.read(
+      line`.operator_request.channel=notes&.operator_request.about=${ids}&.order=created.at&.fields=entity.eid,operator_request.about`,
+    ),
+  ])
+  let docs = asked.length
+    ? await g.read(
+      line`.output.source=${
+        asked.map((r) => r.entity.eid)
+      }&.doc&.fields=doc.title,doc.body,output.source`,
+    )
+    : []
+  let at = (b: Bundle) => Date.parse(String(comp(b, 'created')?.at ?? ''))
+  return Object.fromEntries(began.map((b, i) => {
+    let times = lines.filter((l) => comp(l, 'operator_call')?.call == calls[i])
+      .map(at).filter(Number.isFinite)
+    let about = new Set(
+      asked.filter((r) => comp(r, 'operator_request')?.about == ids[i])
+        .map((r) => r.entity.eid),
+    )
+    let via = comp(b, 'operator_call')?.via
+    return [ids[i], {
+      ...via ? { via: title(String(via)) } : {},
+      seconds: times.length
+        ? Math.round((Math.max(...times) - Math.min(...times)) / 1000)
+        : 0,
+      notes: docs.filter((d) => about.has(String(comp(d, 'output')?.source)))
+        .map((d) => ({
+          title: String(comp(d, 'doc')?.title ?? ''),
+          body: String(comp(d, 'doc')?.body ?? ''),
+        })),
+    }]
+  }))
 }

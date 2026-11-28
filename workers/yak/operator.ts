@@ -3714,7 +3714,7 @@ export let operating = (
         operator_call: {
           call: o.call,
           ...o.said ? { said: true } : {},
-          ...o.began ? { began: true } : {},
+          ...o.began ? { began: true, ...o.via ? { via: o.via } : {} } : {},
           ...o.notes ? { notes: true } : {},
         },
         $actor: { by: o.said ? space.eid : held.person, via: session },
@@ -4081,7 +4081,8 @@ export type Operator = {
   /** A line of a call its talking model hears and speaks: the caller's
    * words, its talking model's (`said`), that the call began (`began`), or
    * that notes of it were asked for (`notes`), kept in the person's
-   * conversation as passive context, starting no turn.
+   * conversation as passive context, starting no turn. Where it began names
+   * the line it came on (`via`).
    * Words that may be someone else's than the turn's person are `heard`,
    * and steer it (@yaks/session `steered`). */
   note: (
@@ -4092,6 +4093,7 @@ export type Operator = {
       call: string
       said?: boolean
       began?: boolean
+      via?: string
       notes?: boolean
       heard?: boolean
     },

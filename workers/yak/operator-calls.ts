@@ -1260,6 +1260,7 @@ export let calling = async (
       operator.note({ person: ticket.person }, space, text, {
         call: ticket.call,
         ...o,
+        ...o.began ? { via: ticket.via } : {},
       })
     )
     noted = kept.catch((e) => defect(e, CALL))

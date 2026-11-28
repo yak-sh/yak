@@ -660,6 +660,11 @@
           "type": "boolean",
           "description": "That the call began here, rather than words said on it."
         },
+        "via": {
+          "$id": "urn:uuid:fd10e314-7d0b-4067-91de-23d64f316de5",
+          "type": "string",
+          "description": "Where the call began, the line it came on: a chat platform's name for its voice room (discord), else the phone provider's (telnyx)."
+        },
         "asked": {
           "$id": "urn:uuid:32b782c8-acec-4557-9069-2b7fd5edeab6",
           "type": "boolean",
