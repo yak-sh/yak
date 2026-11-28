@@ -123,8 +123,8 @@ export class Builder extends Durable {
     super(ctx)
     this.#ctx = ctx
     this.ceiling
-    // yaks.app's own keys over its secrets (platform-keys.ts), refreshed as
-    // each request and alarm begins, so the Operator holding it sees them.
+    // The Operator holds the overlay while it works so it sees refreshed
+    // provider keys. Reads of its store need only the Worker bindings.
     this.#env = keysOn(env)
     this.#lent = browsers(
       () => ctx.getWebSockets(),
@@ -178,7 +178,6 @@ export class Builder extends Durable {
     this.#asked++
     let answer
     try {
-      await keyed(this.#env)
       answer = await tallying(tally, () => this.#answer(request))
     } catch (e) {
       // An object past the rows it may read or write (@yaks/durable-object
@@ -902,7 +901,8 @@ export class Builder extends Durable {
     )
   }
 
-  #work() {
+  async #work() {
+    await keyed(this.#env)
     return this.#operator ??= unstopped(
       () => this.#operator = undefined,
       async () => {

@@ -276,6 +276,28 @@ let asking =
     said.push(path)
   }
 
+test('a cold Builder reads Updates with the seat it was given and no directory round trip', async () => {
+  let o = await seeded([], {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
+  })
+  let directory = holding(o, Infinity)
+  let response = await o.object.fetch(
+    new Request('https://builder/operator/updates', {
+      method: 'POST',
+      headers: seated(o.space, o.held),
+      body: JSON.stringify({ seen: true }),
+    }),
+  )
+  assertEquals(response.status, 200)
+  assertEquals(await response.json(), {
+    updates: [],
+    waiting: 0,
+    expires: null,
+  })
+  assertEquals(directory.reads(), 0)
+})
+
 test('a new incarnation makes its store while a seat read is under way', async () => {
   let o = await seeded()
   // What its storage ran before the seat read answered, and in all.
