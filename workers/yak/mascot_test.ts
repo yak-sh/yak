@@ -1,6 +1,6 @@
 // Wherever yaks.app says something is at work, the yak is there doing it, with
 // the words beside it and a still frame for less motion (mascot.ts).
-import { test } from '@yaks/testing'
+import { cleanup, test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { JSDOM } from 'jsdom'
@@ -128,12 +128,14 @@ let waiting = (
   loads = (_url: string) => true,
   net = (_file: string) => true,
 ) => {
-  let { document, Event, CustomEvent, MutationObserver } = new JSDOM(
+  let { window } = new JSDOM(
     `<main>${markup(h(Idle, { className: 'Composer_Figure' }))}</main>`,
-  ).window
-  let img = document.querySelector('img')!
+  )
+  cleanup(() => window.close())
+  let { document, Event, CustomEvent, MutationObserver } = window
+  let img = document.querySelector('img[data-idle]')!
   // each timer by its id; a cleared one is dropped
-  let timers = new Map<number, [() => void, number]>()
+  let timers = new Map<number, [() => void | Promise<void>, number]>()
   let ids = 0
   let fetched: string[] = []
   new Function(
@@ -145,6 +147,7 @@ let waiting = (
     'setTimeout',
     'clearTimeout',
     'MutationObserver',
+    'addEventListener',
     code,
   )(
     document,
@@ -167,28 +170,31 @@ let waiting = (
         return loads(this.src) ? 128 : 0
       }
     },
-    (fn: () => void, ms: number) => (timers.set(++ids, [fn, ms]), ids),
+    (
+      fn: () => void | Promise<void>,
+      ms: number,
+    ) => (timers.set(++ids, [fn, ms]), ids),
     (id: number) => timers.delete(id),
     MutationObserver,
+    window.addEventListener.bind(window),
   )
   img.dispatchEvent(new Event('load'))
   let step = async () => {
     let [id, [fn, ms]] = timers.entries().next().value!
     timers.delete(id)
-    fn()
-    await new Promise((r) => setTimeout(r, 0))
+    await fn()
     return ms
   }
   let shown = () => [img.getAttribute('src'), img.getAttribute('srcset')]
   let ask = (loop: string) =>
     img.dispatchEvent(new CustomEvent('idle', { detail: loop }))
-  let posing = (pose?: string) =>
-    pose
-      ? img.setAttribute('data-pose', pose)
-      : img.removeAttribute('data-pose')
-  // a change to what he is doing is heard once the observer runs
-  let settled = () => new Promise((r) => setTimeout(r, 0))
-  return { step, shown, fetched, ask, posing, settled, timers, rest: shown() }
+  let posing = (pose?: string) => {
+    if (pose) img.setAttribute('data-pose', pose)
+    else img.removeAttribute('data-pose')
+    // The mutation queues its observer before the awaiting test continues.
+    return Promise.resolve()
+  }
+  return { step, shown, fetched, ask, posing, timers, rest: shown() }
 }
 
 let code = await Deno.readTextFile(
@@ -202,9 +208,11 @@ test('he sits, then plays each of his loops once before any comes again', async 
     let rested = await yak.step()
     assert(rested >= 5000 && rested <= 9000, `${rested}`)
     let [src, set] = yak.shown()
-    let loop = src!.match(
+    let match = src?.match(
       /^blob:\/mascot\/idle-(\w+)-128\.webp$/,
-    )![1] as keyof typeof IDLE
+    )
+    assert(match, `The yak should be playing a loop, showing ${src}`)
+    let loop = match[1] as keyof typeof IDLE
     assertEquals(set, null)
     played.push(loop)
     assertEquals(await yak.step(), IDLE[loop])
@@ -240,8 +248,7 @@ test('while a page names a pose, he holds it at once, cutting a loop short, then
   let yak = waiting()
   yak.ask('lick')
   await yak.step()
-  yak.posing('thinking')
-  await yak.settled()
+  await yak.posing('thinking')
   assertEquals(yak.shown(), pose('thinking'))
   assertEquals(yak.timers.size, 1, "only the cut loop's end")
   await yak.step()
@@ -251,11 +258,9 @@ test('while a page names a pose, he holds it at once, cutting a loop short, then
     'the loop ending leaves the pose',
   )
   assertEquals(yak.timers.size, 0)
-  yak.posing('checking')
-  await yak.settled()
+  await yak.posing('checking')
   assertEquals(yak.shown(), pose('checking'))
-  yak.posing(undefined)
-  await yak.settled()
+  await yak.posing()
   assertEquals(yak.shown(), yak.rest)
   let rested = await yak.step()
   assert(rested >= 5000 && rested <= 9000, `${rested}`)
@@ -263,8 +268,7 @@ test('while a page names a pose, he holds it at once, cutting a loop short, then
 
 test('with less motion asked for, a pose is its still frame', async () => {
   let yak = waiting(true)
-  yak.posing('thinking')
-  await yak.settled()
+  await yak.posing('thinking')
   assertEquals(yak.shown(), pose('thinking-still'))
 })
 
