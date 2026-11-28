@@ -40,9 +40,11 @@ let of = (specifier: string) => new URL(import.meta.resolve(specifier))
 let external = Object.keys(SHARED)
 let paged = { external }
 // The scripts an Operator page loads together (the chat, its views, Updates
-// and its actions, Matches), made together so what they share is one chunk
-// the page runs once (@yaks/web/assets `split`): the views' parts and the
-// graph's words load once.
+// and its actions, Matches, its settings) and the Friends dock beside them on
+// every signed-in page, made together so what they share is one chunk the page
+// runs once (@yaks/web/assets `split`): the views' parts and the graph's words
+// load once. A script more in the group cuts what they share into more pieces,
+// and a phone on a slow network waits on each one.
 let operator = { external, split: 'operator' }
 // React and React DOM as the page's import map names them, made together so
 // each module of React is one the page runs once.
@@ -121,7 +123,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_dock.js',
     bundle: of('@yaks/platform/friends-dock-browser'),
-    ...paged,
+    ...operator,
     named: true,
   },
   // The Profile page kept current (@yaks/platform/profile-browser).
@@ -172,7 +174,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_operator-settings.js',
     bundle: of('@yaks/platform/operator-settings-browser'),
-    ...paged,
+    ...operator,
     named: true,
   },
   // A space's Matches kept current (@yaks/platform/operator-matches-browser).
