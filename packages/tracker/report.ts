@@ -38,6 +38,7 @@ export type Context = {
     | 'onerror'
     | 'onunhandledrejection'
     | 'console'
+    | 'loading'
   breadcrumbs?: Crumb[]
   request?: Bundle
   fallback?: Sink
@@ -386,6 +387,8 @@ export let caught = (error: unknown, context: Context): Promise<void> => {
 export type Break = {
   /** the page's release, when its reporter said which it loaded */
   version: number | null
+  /** the platform deployment that drew the page, when it named one */
+  deployment?: string
   /** `page /path`, or the Reporting API's type and the page's path */
   request: string
   message: string
@@ -410,6 +413,7 @@ let MECHANISMS = new Set<unknown>([
   'onerror',
   'onunhandledrejection',
   'console',
+  'loading',
 ])
 
 // What one report says broke, in whatever words its sender has: the page
@@ -590,6 +594,10 @@ export let broken = (
           b.version >= 0
           ? b.version
           : null,
+      ...typeof b.deployment == 'string' &&
+          /^[0-9a-f-]{36}$/i.test(b.deployment)
+        ? { deployment: b.deployment }
+        : {},
       request: `${typeof r.type == 'string' ? r.type : 'page'} ${at}`.trim(),
       message,
       stack: String(

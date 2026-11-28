@@ -2,6 +2,15 @@
   color: var(--muted);
   padding: var(--half-gap);
 }
+.Loading_Words:not([hidden]) {
+  display: contents;
+}
+.Loading:has(> .Loading_Words[hidden]):not([data-yak-loading-failed]) {
+  display: none;
+}
+.Loading_Failed {
+  color: var(--negative);
+}
 /* What is at work, before the words that say it, on their line. */
 .Loading_Mark {
   display: inline-block;

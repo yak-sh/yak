@@ -3,15 +3,19 @@
 // script throws, and what the reporter sends is posted to the apex's door,
 // which files it in the tracker tagged with the page, when our own scripts
 // threw it and a page of ours sent it.
-import { equal, ok, test } from '@yaks/testing'
+import { clock, equal, ok, test } from '@yaks/testing'
+import { createElement as h } from 'react'
+import { Loading } from '@yaks/ui/Loading'
+import { retryLoading } from '@yaks/ui/interaction'
 import { faultOf } from '@yaks/tracker'
 import { parseHTML } from 'linkedom'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { within } from './defects.ts'
 import { answer, PATH } from './page-report.ts'
 import { shell } from './pages.ts'
 import { sheeted } from './sheets.ts'
 import { page } from './site/mod.ts'
+import { markup } from './html.ts'
 
 let reporter = await Deno.readTextFile(
   new URL('./public/report.js', import.meta.url),
@@ -31,18 +35,25 @@ let loaded = (
   status = 204,
   headers: Record<string, string> = {},
   before?: (window: Window) => void,
+  read?: (url: string) => Promise<Response>,
 ) => {
   let { document, window } = parseHTML(html)
   let first = document.querySelector<HTMLScriptElement>(
     'script:not([type=importmap])',
   )!
   let sent: { url: string; body: Blob }[] = []
+  let reloads = 0
   Object.defineProperty(document, 'currentScript', { value: first })
   // linkedom resolves no base, and the wrapper reads addresses against it.
   Object.defineProperty(document, 'baseURI', { value: page })
-  let fetch = (_url?: string) =>
-    Promise.resolve(new Response(null, { status, headers }))
-  let scope = { fetch, console: { error: () => {} } }
+  let time = clock()
+  let fetch = (url: string) =>
+    read?.(url) ?? Promise.resolve(new Response(null, { status, headers }))
+  let scope = {
+    fetch,
+    console: { error: () => {} },
+    MutationObserver: window.MutationObserver,
+  }
   if (before) {
     let early = document.querySelector('script[data-yak-early-report]')!
     new Function(
@@ -73,7 +84,7 @@ let loaded = (
     reporter,
   )(
     document,
-    new URL(page),
+    Object.assign(new URL(page), { reload: () => reloads++ }),
     { sendBeacon: (url: string, body: Blob) => sent.push({ url, body }) },
     { origin: new URL(page).origin },
     scope,
@@ -82,10 +93,18 @@ let loaded = (
     window.removeEventListener.bind(window),
     window.dispatchEvent.bind(window),
     window.CustomEvent,
-    () => 0,
-    () => {},
+    (run: () => void, ms: number) => time.after(ms, run),
+    (cancel?: () => void) => cancel?.(),
   )
-  return { document, window, first, sent, fetch: scope.fetch }
+  return {
+    document,
+    window,
+    first,
+    sent,
+    time,
+    fetch: scope.fetch,
+    reloads: () => reloads,
+  }
 }
 
 let ran = async (own: string, frame = at, page = at) => {
@@ -131,6 +150,147 @@ let filed = async (
   return rows.flat()
 }
 
+test('a stuck kit page reports reads and the client error through the platform door and retries in place', async () => {
+  let id = crypto.randomUUID()
+  let html = await shell(
+    { CF_VERSION_METADATA: { id } },
+    'Operator',
+    null,
+    200,
+    markup(h('div', {
+      'data-yak-loading-stage': 'awaiting the streamed answer',
+    }, h(Loading, { state: 'conversation' }, 'Loading conversation…'))),
+  ).text()
+  let finish = () => {}
+  let body = new ReadableStream({
+    start: (stream) => {
+      finish = () => stream.close()
+    },
+  })
+  let { document, window, fetch, sent, time } = loaded(
+    html,
+    at,
+    200,
+    {},
+    undefined,
+    (url) =>
+      url.endsWith('/body')
+        ? Promise.resolve(new Response(body))
+        : url.endsWith('/done')
+        ? Promise.resolve(new Response('done'))
+        : new Promise(() => {}),
+  )
+  let mark = document.querySelector<HTMLElement>('[data-yak-loading]')!
+  let retried = 0
+  retryLoading(mark, () => retried++)
+  void fetch(at + '/headers?token=private')
+  let reading = (await fetch(at + '/body')).text()
+  equal(await (await fetch(at + '/done')).text(), 'done')
+  window.dispatchEvent(Object.assign(new window.Event('unhandledrejection'), {
+    reason: Object.assign(Error('A client error'), {
+      stack: `Error: A client error\n    at ${at}`,
+    }),
+  }))
+  await time.advance(14_999)
+  equal(mark.querySelector('button'), null)
+  equal(sent.length, 1)
+  await time.advance(1)
+  finish()
+  await reading
+  let [row] = await filed(sent[1].body, {
+    'sec-fetch-site': 'same-origin',
+    'user-agent':
+      'Mozilla/5.0 (iPhone) Version/27.2 Mobile/15E148 Safari/604.1',
+  })
+  let error = row.error as Comp
+  let exception = row.exception as Comp
+  equal(error.commit, id)
+  ok(
+    String((error.tags as Record<string, string>).agent).includes(
+      'Version/27.2',
+    ),
+  )
+  equal(exception.mechanism, 'loading')
+  ok(String(exception.cause).includes('A client error'))
+  ok(JSON.stringify(row).includes('Loading timed out: conversation'))
+  let loading = ((row.breadcrumbs as Comp).items as {
+    category: string
+    message: string
+  }[]).filter((crumb) => crumb.category == 'loading').map((crumb) =>
+    crumb.message
+  )
+  let [reads, stage] = loading
+  equal(
+    reads,
+    'Open reads: GET /manage/ada/chat/new/headers (waiting for headers), GET /manage/ada/chat/new/body (reading response)',
+  )
+  ok(stage.includes('awaiting the streamed answer'))
+  equal(
+    mark.querySelector('[data-yak-loading-words]')?.hasAttribute('hidden'),
+    true,
+  )
+  let retry = mark.querySelector('button')!
+  equal(retry.textContent, 'Try again')
+  retry.click()
+  equal(retried, 1)
+  equal(
+    mark.querySelector('[data-yak-loading-words]')?.hasAttribute('hidden'),
+    false,
+  )
+  mark.remove()
+  await time.advance(15_000)
+  equal(sent.length, 2)
+})
+
+test('a closed fold has no deadline until it opens, and an answered fold stays quiet', async () => {
+  let html = await shell(
+    {},
+    'Operator',
+    null,
+    200,
+    '<details><summary>Details</summary>' +
+      markup(h(Loading, { state: 'fold' })) + '</details>',
+  ).text()
+  let { document, time, sent } = loaded(html, at)
+  let fold = document.querySelector('details')!
+  await time.advance(15_000)
+  equal(sent.length, 0)
+  fold.setAttribute('open', '')
+  await Promise.resolve()
+  await time.advance(14_999)
+  fold.querySelector('[data-yak-loading]')!.replaceWith('The fold arrived.')
+  await time.advance(1)
+  equal(sent.length, 0)
+})
+
+test('a hidden conversation starts its deadline when shown and can reload even without an opening module', async () => {
+  let html = await shell(
+    {},
+    'Operator',
+    null,
+    200,
+    markup(h('div', {
+      hidden: true,
+      'data-yak-loading-stage': 'unbound',
+    }, h(Loading, { state: 'conversation' }, 'Loading conversation…'))),
+  ).text()
+  let { document, sent, time, reloads } = loaded(html, at)
+  let slot = document.querySelector('[data-yak-loading-stage]')!
+  await time.advance(30_000)
+  equal(sent.length, 0)
+  slot.removeAttribute('hidden')
+  await Promise.resolve()
+  await time.advance(14_999)
+  equal(sent.length, 0)
+  await time.advance(1)
+  equal(sent.length, 1)
+  ok((await sent[0].body.text()).includes('Stage: unbound'))
+  await time.advance(30_000)
+  equal(sent.length, 1)
+  slot.querySelector('button')!.click()
+  equal(reloads(), 1)
+})
+
 test('a throw in a platform page reaches the tracker, tagged with the page', async () => {
   let { first, sent } = await ran('<script type="module">m$1()</script>')
   ok(first.src.endsWith('/report.js'), 'the reporter is the first script')
@@ -151,7 +311,7 @@ test('a break is tagged with the browser that sent it', async () => {
   equal((row.error as { tags: Record<string, string> }).tags.agent, safari)
 })
 
-test('a parser-time throw reaches the tracker after the deferred reporter starts', async () => {
+test('a parser-time throw reaches the tracker when the reporter arrives', async () => {
   let html = await shell({}, 'Operator', null, 200, '').text()
   let { first, sent } = loaded(html, at, 204, {}, (win) => {
     let error = Object.assign(Error('parser-time throw'), {
@@ -166,7 +326,7 @@ test('a parser-time throw reaches the tracker after the deferred reporter starts
       }),
     )
   })
-  ok(first.hasAttribute('defer'))
+  ok(first.hasAttribute('async'))
   equal(sent.length, 1)
   let [row] = await filed(sent[0].body)
   ok(JSON.stringify(row).includes('parser-time throw'))

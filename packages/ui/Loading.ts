@@ -6,24 +6,38 @@
  *
  * @module
  */
-import { createElement as h } from 'react'
+import { createElement as h, type FunctionComponent } from 'react'
 import type { Sheet } from '@yaks/tui/theme'
 import { Dot } from './Dot.ts'
-import { el, type Part } from './el.ts'
+import { el, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 let Frame = el('div', 'Loading')
 let Mark = el('span', 'Loading_Mark')
 let Image = el('img', 'Loading_Image')
+let Words = el('span', 'Loading_Words')
 
-let Say: Part = ({ children = 'Loading…', ...props }) =>
-  h(Frame, { role: 'status', 'aria-live': 'polite', ...props }, children)
+type Pending = Props & {
+  /** A diagnostic name for this read. False for specimens and write feedback. */
+  state?: string | false
+}
+
+let Say = (
+  { state = 'page content', children = 'Loading…', ...props }: Pending,
+) =>
+  h(Frame, {
+    role: 'status',
+    'aria-live': 'polite',
+    ...props,
+    'data-yak-loading': state || undefined,
+  }, state ? h(Words, { 'data-yak-loading-words': '' }, children) : children)
 
 /** Announce a pending read without hiding rows already on screen. */
-export let Loading: Part & { Mark: Part; Image: Part } = Object.assign(Say, {
-  Mark,
-  Image,
-})
+export let Loading: FunctionComponent<Pending> & { Mark: Part; Image: Part } =
+  Object.assign(Say, {
+    Mark,
+    Image,
+  })
 
 export let description = 'A read is in progress, not empty.'
 /** A terminal has no animation to show, so the mark takes no room. */
@@ -32,13 +46,13 @@ export let sheet = (c: Colors): Sheet => ({
   Loading_Mark: { hidden: true },
 })
 export let specimens = (): Specimen[] => [
-  ['Loading', h(Loading, {})],
-  ['Loading more', h(Loading, {}, 'Loading more…')],
+  ['Loading', h(Loading, { state: false })],
+  ['Loading more', h(Loading, { state: false }, 'Loading more…')],
   [
     'Loading, Mark',
     h(
       Loading,
-      {},
+      { state: false },
       h(Mark, { 'aria-hidden': true }, h(Dot, { mod: ['pulse', 'active'] })),
       'Checking the files…',
     ),
@@ -47,7 +61,7 @@ export let specimens = (): Specimen[] => [
     'Loading, Mark, Image',
     h(
       Loading,
-      {},
+      { state: false },
       h(
         Mark,
         { 'aria-hidden': true },

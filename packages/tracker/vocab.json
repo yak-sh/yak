@@ -245,7 +245,8 @@
             "wrapper",
             "onerror",
             "onunhandledrejection",
-            "console"
+            "console",
+            "loading"
           ]
         }
       },

@@ -60,7 +60,7 @@ let page = (
   entries: Bundle[],
   heard: { take?: number }[] = [],
   take?: number,
-  unfold?: (line: string) => Promise<Lines | null>,
+  unfold?: (line: string, signal: AbortSignal) => Promise<Lines | null>,
   tab: 'new' | 'same' = 'new',
 ) => {
   let { document, Event } = parseHTML(
@@ -235,19 +235,22 @@ let told = entry('told', 1, {
 let telling = (fails = 0, tab: 'new' | 'same' = 'new', fetches = true) => {
   let all = [told, entry('said', 2, { content: { body: 'Hello' } })]
   let asked: string[] = []
+  let reads: AbortSignal[] = []
   let answers: (() => void)[] = []
   let p = page(
     all,
     [],
     undefined,
     fetches
-      ? (line) => {
+      ? (line, signal) => {
         asked.push(line)
+        reads.push(signal)
         let { lines } = frame('task-1', all, names, 0).operator
         let one = { ...lines, lines: lines.lines.filter((l) => l.id == line) }
+        let failsThisRead = asked.length <= fails
         return new Promise((done, fail) =>
           answers.push(() =>
-            asked.length <= fails ? fail(new Error('offline')) : done(one)
+            failsThisRead ? fail(new Error('offline')) : done(one)
           )
         )
       }
@@ -260,8 +263,13 @@ let telling = (fails = 0, tab: 'new' | 'same' = 'new', fetches = true) => {
   return {
     p,
     asked,
+    reads,
     press: () => press(fold().querySelector('summary')!),
     retry: () => press(fold().querySelector('.More_Body button')!),
+    retryPending: () =>
+      fold().querySelector('[data-yak-loading]')!.dispatchEvent(
+        new p.Event('yak-loading-retry', { bubbles: true, cancelable: true }),
+      ),
     // the fetches asked for answered, and the page's drawing after them
     answer: async () => {
       answers.splice(0).forEach((a) => a())
@@ -336,4 +344,16 @@ test('a fold whose line could not be fetched says so, and its retry opens it', a
   equal(t.shown(), { open: true, says: 'Base' })
   t.press()
   equal(t.shown().open, false)
+})
+
+test('retrying a stuck fold replaces its pending read and ignores its late failure', async () => {
+  let t = telling(1)
+  using _p = t.p
+  t.press()
+  equal(t.retryPending(), false)
+  equal(t.asked, ['told', 'told'])
+  equal(t.reads[0].aborted, true)
+  await t.answer()
+  equal(t.p.errors, [])
+  equal(t.shown(), { open: true, says: 'Base' })
 })

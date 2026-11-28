@@ -89,9 +89,13 @@ export let ready = (
   let workspaceTitle = homeTitle
   let view = doc.createElement('div')
   let busy = doc.createElement('p')
+  let words = doc.createElement('span')
   busy.className = 'Loading'
   busy.setAttribute('role', 'status')
-  busy.textContent = 'Loading…'
+  busy.setAttribute('data-yak-loading', 'workspace')
+  words.setAttribute('data-yak-loading-words', '')
+  words.textContent = 'Loading…'
+  busy.append(words)
   view.className = 'Site_Workspace'
   view.setAttribute('data-site-frame', '')
   view.setAttribute('aria-busy', 'true')

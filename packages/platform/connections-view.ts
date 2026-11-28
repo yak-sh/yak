@@ -29,6 +29,7 @@ import { Field } from '@yaks/ui/Field'
 import { Form } from '@yaks/ui/Form'
 import { Group } from '@yaks/ui/Group'
 import { Icon } from '@yaks/ui/Icon'
+import { Loading } from '@yaks/ui/Loading'
 import { Logo } from '@yaks/ui/Logo'
 import { Modal } from '@yaks/ui/Modal'
 import { More } from '@yaks/ui/More'
@@ -1597,11 +1598,6 @@ export let connectionsView = (
     : undefined
   let offers = [c.asked, ...c.built].filter((i): i is Offered => !!i)
   let offered = opened ? offers.find((i) => i.name == opened) : undefined
-  let note = (said: string) =>
-    h(Modal.Body, null, [
-      heading('Connection details', { actions: close }),
-      h('p', { role: 'status' }, said),
-    ])
   // What the dialog shows, by the key it is opened on; one the page does not
   // hold is said as not here, or loading while the page asks for it.
   let showing = offered?.name ?? (open && keyOf(open)) ?? loan?.eid ??
@@ -1630,11 +1626,16 @@ export let connectionsView = (
   if (showing && !bodies.some(([k]) => k == showing)) {
     bodies.push([
       showing,
-      note(
+      h(Modal.Body, null, [
+        heading('Connection details', { actions: close }),
         showing == c.open
-          ? 'This connection is not on this page: it was removed, or it belongs to another space.'
-          : 'Loading connection…',
-      ),
+          ? h(
+            'p',
+            { role: 'status' },
+            'This connection is not on this page: it was removed, or it belongs to another space.',
+          )
+          : h(Loading, { state: 'connection', as: 'p' }, 'Loading connection…'),
+      ]),
     ])
   }
   // Every body is kept in the page, showing only while opened, so what is

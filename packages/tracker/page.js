@@ -4,11 +4,15 @@
 // so none of its names land in the page's global scope, where a classic
 // script declaring its own `send` or `version` would refuse to run.
 ;(() => {
+  let installed = Symbol.for('yaks.page-report')
+  if (globalThis[installed]) return
   let script = document.currentScript
   let door = new URL(`${script.dataset.yakAt}api/report`, location.href).href
   // Keep the version this page loaded, even after another release is served.
   let version = Number(script.dataset.yakVersion)
+  let deployment = script.dataset.yakDeploy
   let sent = 0
+  let stalled = 0
   let crumbs = []
   let crumb = (category, message) => {
     crumbs.push({ at: new Date().toISOString(), category, message })
@@ -27,7 +31,9 @@
 
   let send = (body) => {
     // A render loop that throws every frame must not become a write loop.
-    if (dated || sent++ >= 20) return
+    if (dated || (body.mechanism == 'loading' ? stalled++ : sent++) >= 20) {
+      return
+    }
     try {
       let blob = new Blob([
         // The page it happened on, beside `url`, which names where: the
@@ -36,6 +42,7 @@
           ...body,
           page: location.href,
           version,
+          deployment,
           breadcrumbs: crumbs,
         }),
       ], {
@@ -55,10 +62,18 @@
   }
 
   let said = (e) => (e && e.message) || String(e)
+  let lastError
+  let remember = ({ message, stack }) => {
+    lastError = {
+      page: location.href,
+      cause: [message, stack].filter(Boolean).join('\n').slice(0, 4000),
+    }
+  }
 
   // A break, and the page's own account of it: everything that goes through
   // here is something nobody chose, so it may also draw the soft state.
   let broke = (body) => {
+    remember(body)
     send(body)
     sorry()
   }
@@ -316,13 +331,15 @@
       // it rejected: a page losing its server is not a break.
       if (decided(error)) return consoleError.apply(console, args)
       let cause = error && causes(error)
-      send({
+      let body = {
         message,
         stack: error && error.stack,
         ...cause ? { cause } : {},
         url: location.href,
         mechanism: 'console',
-      })
+      }
+      remember(body)
+      send(body)
       consoleError.apply(console, args)
     }
   }
@@ -363,17 +380,43 @@
     for (let key of [...held.keys()]) say(key)
   })
 
+  let reads = new Map()
+  let read = (name, phase) => {
+    let key = {}
+    reads.set(key, { name, phase })
+    return () => reads.delete(key)
+  }
+  let reading = (response, name) => {
+    for (
+      let method of ['arrayBuffer', 'blob', 'bytes', 'formData', 'json', 'text']
+    ) {
+      let consume = response[method]
+      if (!consume) continue
+      response[method] = async function () {
+        let done = read(name, 'reading response')
+        try {
+          return await consume.call(this)
+        } finally {
+          done()
+        }
+      }
+    }
+  }
+
   globalThis.fetch = async (input, init) => {
     // Against the page's base, not its address: the kernel gives every page a
     // `<base>` at the app's own root (apps.ts `based`), so that is what the
     // browser resolved `./api/query` against — resolving it against
     // `location.href` here would name a path nothing was ever asked for.
     let where = new URL((input && input.url) || input, document.baseURI)
-    let key = `${
-      (init && init.method) || (input && input.method) || 'GET'
-    } ${where.href}`
+    let method = (init && init.method) || (input && input.method) || 'GET'
+    let key = `${method} ${where.href}`
+    let name = mine(where) && /^(GET|HEAD)$/i.test(method) &&
+      `${method.toUpperCase()} ${asked(where)}`
+    let done = name && read(name, 'waiting for headers')
     try {
       let r = await plain(input, init)
+      done && done()
       // This browser's store for the app moved at this answer: a stranger's
       // first write, the page's own or one the app's worker made for them, gave
       // them a store of their own (@yaks/platform/visits). Every answer the
@@ -412,6 +455,7 @@
         if (r.status >= 500) hold(key, body)
         else send(body)
       }
+      if (name) reading(r, name)
       return r
     } catch (e) {
       // A fetch that rejects never had an answer. One the page gave up waiting
@@ -424,16 +468,20 @@
       // it is decided here.
       if (mine(where) && e && typeof e == 'object') judged.add(e)
       if (mine(where) && e?.name == 'TimeoutError') {
-        hold(key, {
+        let body = {
           message: `${asked(where)}: ${said(e)}`,
           url: location.href,
           mechanism: 'wrapper',
-        })
+        }
+        remember(body)
+        hold(key, body)
       } else if (mine(where)) {
         crumb('fetch', `${where.pathname}: ${said(e)}`)
         if (held.has(key)) hold(key)
       }
       throw e
+    } finally {
+      done && done()
     }
   }
 
@@ -484,7 +532,7 @@
     if (told) return
     told = true
     settled(() => {
-      if (!bare()) return
+      if (!bare() || !dated && [...marks()].some(visible)) return
       try {
         let box = document.createElement('div')
         box.id = 'yak-sorry'
@@ -532,7 +580,132 @@
       ;(document.body || document.documentElement).append(line)
     } catch { /* a reporter that throws is worse than one that misses */ }
   })
-  let early = globalThis[Symbol.for('yaks.early-report')]?.() ?? []
+
+  // The Loading kit marks pending reads in both server HTML and client draws.
+  // The reporter can see the mark even when the code meant to clear it fails.
+  let MARK = '[data-yak-loading]'
+  let marks = () => document.querySelectorAll?.(MARK) ?? []
+  let visible = (mark) =>
+    mark.isConnected &&
+    !mark.closest('[hidden], [inert], details:not([open]), dialog:not([open])')
+  let waits = new Map()
+  let deadline = 15_000
+  let active = () => document.visibilityState != 'hidden'
+  let stop = (mark, wait) => {
+    clearTimeout(wait.timer)
+    wait.failure?.remove()
+    if (wait.words) wait.words.hidden = false
+    mark.removeAttribute('data-yak-loading-failed')
+    waits.delete(mark)
+  }
+  let overdue = (mark, wait) => {
+    if (!active() || !mark.matches(MARK) || !visible(mark)) {
+      return stop(mark, wait)
+    }
+    let open = [...reads.values()].slice(0, 12).map(({ name, phase }) =>
+      `${name.slice(0, 115)} (${phase})`
+    )
+    if (reads.size > open.length) {
+      open.push(`and ${reads.size - open.length} more`)
+    }
+    if (document.readyState == 'loading') open.push('Document (receiving HTML)')
+    if (wait.state == 'page opening') {
+      let sheets = [...document.querySelectorAll('link[rel=stylesheet][href]')]
+        .filter((link) => !link.sheet).map((link) => at(link.href))
+        .filter((url) => url && mine(url))
+      for (let url of sheets.slice(0, 5)) {
+        open.push(`Stylesheet ${url.pathname.slice(0, 115)}`)
+      }
+    }
+    crumb(
+      'loading',
+      open.length ? `Open reads: ${open.join(', ')}` : 'No open reads',
+    )
+    let stage = mark.closest('[data-yak-loading-stage]')?.dataset
+      .yakLoadingStage
+    if (stage) {
+      crumb(
+        'loading',
+        `Stage: ${stage.slice(0, 100)} (document: ${document.readyState})`,
+      )
+    }
+    send({
+      message: `Loading timed out: ${mark.dataset.yakLoading.slice(0, 100)}`,
+      url: location.origin + location.pathname,
+      mechanism: 'loading',
+      cause: lastError?.page == location.href ? lastError.cause : undefined,
+    })
+    let failure = document.createElement('span')
+    let retry = document.createElement('button')
+    failure.className = 'Loading_Failed'
+    retry.className = 'Button Button-quiet'
+    retry.type = 'button'
+    retry.textContent = 'Try again'
+    retry.onclick = () => {
+      stop(mark, wait)
+      if (
+        mark.dispatchEvent(
+          new CustomEvent('yak-loading-retry', {
+            bubbles: true,
+            cancelable: true,
+          }),
+        )
+      ) location.reload()
+      else scan()
+    }
+    failure.append('This took too long to load. ', retry)
+    mark.setAttribute('data-yak-loading-failed', '')
+    let words = mark.querySelector('[data-yak-loading-words]')
+    if (words && !words.hidden) {
+      wait.words = words
+      words.hidden = true
+    }
+    mark.append(wait.failure = failure)
+  }
+  let scan = () => {
+    for (let [mark, wait] of waits) {
+      if (
+        wait.state != mark.dataset.yakLoading || !visible(mark) ||
+        (wait.failure ? wait.failure.parentNode != mark : !active())
+      ) {
+        stop(mark, wait)
+      }
+    }
+    if (!active()) return
+    for (let mark of marks()) {
+      if (!visible(mark) || waits.has(mark)) continue
+      let wait = { state: mark.dataset.yakLoading }
+      wait.timer = setTimeout(() => overdue(mark, wait), deadline)
+      waits.set(mark, wait)
+    }
+  }
+  if (globalThis.MutationObserver && document.documentElement) {
+    let hasMark = (node) => node.matches?.(MARK) || node.querySelector?.(MARK)
+    new globalThis.MutationObserver((changes) => {
+      if (
+        changes.some((change) =>
+          change.type == 'attributes'
+            ? change.attributeName == 'data-yak-loading' ||
+              hasMark(change.target)
+            : [...change.addedNodes, ...change.removedNodes].some(hasMark) ||
+              [...change.removedNodes].some((node) =>
+                node.matches?.('.Loading_Failed')
+              )
+        )
+      ) scan()
+    }).observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-yak-loading', 'hidden', 'inert', 'open'],
+    })
+    document.addEventListener('visibilitychange', scan)
+    scan()
+  }
+
+  let earlyKey = Symbol.for('yaks.early-report')
+  let early = globalThis[earlyKey]?.() ?? []
+  globalThis[installed] = true
   for (let event of early) {
     if (event.type == 'error') error(event)
     else rejection(event)

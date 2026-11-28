@@ -264,7 +264,7 @@ type Details = {
   fault?: string
   commit?: string
   // How a page's reporter met it and what the page did before.
-  page?: Pick<Break, 'mechanism' | 'breadcrumbs'>
+  page?: Pick<Break, 'mechanism' | 'breadcrumbs'> & { version?: number }
 }
 
 let captured = (

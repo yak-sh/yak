@@ -128,7 +128,7 @@ export let Submit = <T>(
             h(Button, { type: 'button', onClick: load }, 'Try again'),
           ),
         ]
-        : h(Loading, {}, loading),
+        : h(Loading, { state: false }, loading),
     )
   }
   let change = (next: SubmitState<T>) => {

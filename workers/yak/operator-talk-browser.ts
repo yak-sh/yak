@@ -21,6 +21,7 @@ import {
   UNFETCHED,
 } from '@yaks/ux/conversation'
 import { Button, Notice } from '@yaks/ui/parts'
+import { retryLoading } from '@yaks/ui/interaction'
 import { opening, unsaid } from '@yaks/session/conversation'
 import { inputOf } from '@yaks/session/intake'
 import { drawLines, type Lines } from './operator-draw.ts'
@@ -103,7 +104,7 @@ export let mountTalk = (
     pane?: () => HTMLElement | null
     onAway?: (away: boolean) => void
     older?: (take: number) => void
-    unfold?: (line: string) => Promise<Lines | null>
+    unfold?: (line: string, signal: AbortSignal) => Promise<Lines | null>
     onError?: (error: Error) => void
     clock?: () => string
   },
@@ -206,13 +207,13 @@ export let mountTalk = (
   // as the server drew it, so the fold keeps its place and whether it is open.
   // One whose fetch failed says so, with a retry, and one nothing can fetch
   // says so too.
-  let fetching = new Set<string>()
+  let fetching = new Map<string, AbortController>()
   let folds = new Set<HTMLElement>()
   let closeFold = (body: HTMLElement) => {
     folds.delete(body)
     render(null, body)
   }
-  let unfolded = (eid: string) => {
+  let unfolded = (eid: string, retry = false) => {
     let fold = box.querySelector(`[data-lazy][data-disclosure="${eid}"]`)
     // The line the page holds whose row holds the fold: a fold in a run of
     // steps stands in a row of its own inside the run's.
@@ -220,7 +221,7 @@ export let mountTalk = (
       held?.lines.find((l) => box.querySelector(`#row-${l.id}`)?.contains(fold))
     let id = line?.id
     // A line drawn from what the page holds draws its folds as they open.
-    if (!fold || line?.uses || (id && fetching.has(id))) return
+    if (!fold || line?.uses || (id && fetching.has(id) && !retry)) return
     let body = fold.lastElementChild as HTMLElement
     if (!id || !line || !unfold) {
       // One holding only Loading that nothing can fetch would wait forever,
@@ -240,21 +241,22 @@ export let mountTalk = (
       )
       return
     }
-    fetching.add(id)
+    fetching.get(id)?.abort()
+    let reading = new AbortController()
+    fetching.set(id, reading)
     folds.add(body)
     render(h(Loading, null), body)
-    unfold(id).then((sent) => {
-      if (!held) return
+    retryLoading(body, () => unfolded(eid, true), reading.signal)
+    unfold(id, reading.signal).then((sent) => {
+      if (!held || reading.signal.aborted) return
       if (!sent?.lines.some((l) => l.id == id)) {
         throw new Error(`Line ${id} was not among the lines fetched to open`)
       }
-      fetching.delete(id)
       closeFold(body)
       held = heard(held, sent)
       put(sent.entries, () => draw())
     }).catch((e) => {
-      fetching.delete(id)
-      if (!held) return
+      if (!held || reading.signal.aborted) return
       onError(e)
       render(
         h(
@@ -269,6 +271,9 @@ export let mountTalk = (
         ),
         body,
       )
+    }).finally(() => {
+      reading.abort()
+      if (fetching.get(id) == reading) fetching.delete(id)
     })
   }
   // Whether a reply is being written.
@@ -276,6 +281,8 @@ export let mountTalk = (
   return {
     close: () => {
       held = null
+      for (let reading of fetching.values()) reading.abort()
+      fetching.clear()
       for (let body of folds) closeFold(body)
       // What it drew stays standing, so a page laid over this one
       // (@yaks/ui/navigate) keeps every line both pages hold rather than

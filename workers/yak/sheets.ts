@@ -3,6 +3,7 @@
 // states the content-made names (assets.ts `planned`); without one, in a test or
 // under `wrangler dev`, the sources answer instead.
 import { type Host, url } from '@yaks/platform/host'
+import { esc } from '@yaks/platform/escape'
 import { island, signedIn } from '@yaks/platform/site-nav'
 import { DATA_TIMING } from '@yaks/platform/ladder'
 import { INTERACTION_PATH, OPEN_PATH } from '@yaks/timing/interaction'
@@ -92,9 +93,12 @@ export let links = (
   favicon = true,
 ) => {
   let at = (name: string) => asset(env, name, names, base)
-  let reporter = `<script src="${at('report.js')}" defer data-yak-at="${
+  let deployment = env.CF_VERSION_METADATA?.id
+  let reporter = `<script src="${at('report.js')}" async data-yak-at="${
     url(env, '/')
-  }"></script><script data-yak-early-report>${EARLY_REPORT}</script>\n`
+  }"${
+    deployment ? ` data-yak-deploy="${esc(deployment)}"` : ''
+  }></script><script data-yak-early-report>${EARLY_REPORT}</script>\n`
   let timed = base ? base + DATA_TIMING + '?open=1' : OPEN_PATH
   let icon = favicon
     ? `<link rel="icon" href="${

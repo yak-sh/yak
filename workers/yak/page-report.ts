@@ -86,7 +86,10 @@ export let answer = (req: Request, env: Host): Promise<Response> => {
         request,
         page: request.slice(request.indexOf(' ') + 1),
         agent,
-      }, { commit, page: { mechanism, breadcrumbs } })
+      }, {
+        commit: commit ?? broke.deployment,
+        page: { mechanism, breadcrumbs, version: broke.version ?? undefined },
+      })
     },
   })(req)
 }

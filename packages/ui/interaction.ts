@@ -29,3 +29,15 @@ export let result = (doc: Document, input?: Event): Result | undefined => {
   )
   return held
 }
+
+/** Handle a stalled loading state's retry in place. By default it reloads. */
+export let retryLoading = (
+  at: Element,
+  retry: () => void,
+  signal?: AbortSignal,
+): void =>
+  at.addEventListener('yak-loading-retry', (event) => {
+    if (event.defaultPrevented || signal?.aborted) return
+    event.preventDefault()
+    retry()
+  }, { signal })

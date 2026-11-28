@@ -15,7 +15,7 @@
  *   open is reported by its open timing (@yaks/timing).
  * - A site can retry an open once after a visible window finishes loading
  *   and still paints nothing. It reports the failure and shows a recovery
- *   screen. A page still waiting on its server or files keeps waiting.
+ *   screen. The page reporter also watches the slow screen for a stall.
  * - A script or stylesheet of the site's own that fails before the page has
  *   loaded says the page could not open, over the page where it drew
  *   nothing, else in a line at its foot, and offers Try again. Its reporter
@@ -69,7 +69,9 @@ let SLOW = 4000
 let style = (o: Opening) => {
   let scheme = (c: { background: string; ink: string }) =>
     `@layer yak-opening{body{background:${c.background}}}.YakOpening{background:${c.background};color:${c.ink}}.YakOpening button{background:${c.ink};color:${c.background}}`
-  return `<style ${OPENING}>${scheme(o)}@media (prefers-color-scheme:dark){${
+  return `<style ${OPENING}>.YakOpening_Words:not([hidden]){display:contents}${
+    scheme(o)
+  }@media (prefers-color-scheme:dark){${
     scheme(o.dark)
   }}.YakOpening{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;margin:0;padding:2rem;text-align:center;font:600 1.05rem/1.5 Nunito,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;animation:YakOpening .2s}.YakOpening img{width:88px;height:88px;border-radius:20px}.YakOpening p{margin:0;max-width:22rem}.YakOpening p+p{font-weight:400;opacity:.8}.YakOpening button{font:inherit;margin-top:.5rem;padding:.6rem 1.5rem;border:0;border-radius:999px;cursor:pointer}.YakOpening_Bar{width:5rem;height:4px;border-radius:2px;background:currentColor;animation:YakOpeningBar 1.2s ease-in-out infinite}.YakOpening[data-state=line]{inset:auto 0 0;flex-direction:row;flex-wrap:wrap;gap:.25rem 1rem;padding:.75rem 1rem calc(.75rem + env(safe-area-inset-bottom));font-size:.95rem;box-shadow:0 -1px 4px #0003}.YakOpening[data-state=line] button{margin:0;padding:.35rem 1rem}@keyframes YakOpening{from{opacity:0}}@keyframes YakOpeningBar{0%,100%{opacity:.15}50%{opacity:.5}}@media (prefers-reduced-motion:reduce){.YakOpening,.YakOpening_Bar{animation:none;opacity:1}.YakOpening_Bar{opacity:.3}}</style>`
 }
@@ -125,28 +127,40 @@ let SCRIPT = `(o, pages, forgot) => {
     box.dataset.state = state
     box.setAttribute('role', state == 'loading' ? 'progressbar' : 'alert')
     if (state == 'loading') box.setAttribute('aria-label', 'Opening ' + o.name)
+    let words = box
+    if (state == 'slow' && !checked) {
+      box.dataset.yakLoading = 'page opening'
+      box.addEventListener('yak-loading-retry', (event) => {
+        event.preventDefault()
+        void again()
+      })
+      words = document.createElement('div')
+      words.className = 'YakOpening_Words'
+      words.dataset.yakLoadingWords = ''
+      box.append(words)
+    }
     if (state != 'line') {
       let mark = document.createElement('img')
       mark.src = o.mark
       mark.alt = ''
       mark.onerror = () => mark.remove()
-      box.append(mark)
+      words.append(mark)
     }
-    for (let words of SAY[state]) {
+    for (let text of SAY[state]) {
       let p = document.createElement('p')
-      p.textContent = words
-      box.append(p)
+      p.textContent = text
+      words.append(p)
     }
     if (state == 'loading') {
       let bar = document.createElement('span')
       bar.className = 'YakOpening_Bar'
-      box.append(bar)
+      words.append(bar)
     } else {
       let button = document.createElement('button')
       button.type = 'button'
       button.textContent = 'Try again'
       button.onclick = again
-      box.append(button)
+      words.append(button)
     }
     ;(document.body || root).append(box)
   }

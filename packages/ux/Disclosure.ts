@@ -8,7 +8,7 @@
 import { createElement as h, type JSX, type ReactNode } from 'react'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { More, State } from '@yaks/ui/parts'
+import { Loading as Pending, More, State } from '@yaks/ui/parts'
 
 /** The page entity carrying this owner's disclosure state. */
 export let disclosureAt = (owner: string): string =>
@@ -65,7 +65,11 @@ export let UNFETCHED = 'data-unfetched'
 
 /** What a lazy disclosure holds until it is opened and drawn. */
 export let Loading = (): JSX.Element =>
-  h(State, { mod: ['pulse', 'active'], [UNFETCHED]: '' }, 'Loading…')
+  h(
+    Pending,
+    { state: 'fold', [UNFETCHED]: '' },
+    h(State, { mod: ['pulse', 'active'] }, 'Loading…'),
+  )
 
 /** Open as its state says; what it holds is drawn whether open or not, so a
  * page drawn on a server opens it with no script, unless it is `lazy`. */

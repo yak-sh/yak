@@ -1,8 +1,7 @@
 /** Load the main Operator view over its opening frame after the frame draws.
- * Each step it reaches is marked on the slot (`data-operator-stage`), which
- * the slot's watch reports should the conversation never come
- * (./operator-opening-watch.ts). */
+ * The slot's stage goes with a timeout in the browser's loading reporter. */
 import { LEAVE, leaving, PAGE, sources, swap } from '@yaks/ui/navigate'
+import { retryLoading } from '@yaks/ui/interaction'
 import { keptChat } from './operator-copy-browser.ts'
 import { VIEW, VIEWED } from './talk-views.ts'
 
@@ -33,8 +32,7 @@ let delivered = async (doc: Document, signal: AbortSignal) => {
   return JSON.parse(text ?? 'null') as string | null
 }
 
-let STAGE = 'data-operator-stage'
-// What the slot says while it waits, or that it failed (./operator-opening-watch.ts).
+let STAGE = 'data-yak-loading-stage'
 let FAILED = 'data-operator-failed'
 let SAID = '[data-operator-loading], [data-operator-failed]'
 
@@ -51,7 +49,9 @@ let open = (slot: HTMLElement): AbortSignal | undefined => {
   if (!path || !person || !space) return stage('unnamed'), undefined
   stage('bound')
   let url = new URL(path, location.href)
-  let answer: Document | undefined, reading = false
+  let pending = slot.querySelector('[data-operator-loading]')
+  let answer: Document | undefined
+  let attempt: AbortController | undefined
   let show = () => {
     if (!answer) return
     if (!visible()) return stage('answered, out of sight')
@@ -75,25 +75,29 @@ let open = (slot: HTMLElement): AbortSignal | undefined => {
       doc.getElementById(location.hash.slice(1))?.scrollIntoView()
     }
   }
-  let load = async () => {
-    if (!visible() || reading) return
+  let load = async (retry = false) => {
+    if (!visible() || attempt && !retry) return
     if (answer) return show()
-    reading = true
+    attempt?.abort()
+    let reading = attempt = new AbortController()
+    let until = AbortSignal.any([signal, reading.signal])
     try {
-      let streamed = slot.hasAttribute('data-operator-stream')
+      let streamed = !retry && slot.hasAttribute('data-operator-stream')
       if (streamed) stage('awaiting the streamed answer')
-      let text = streamed ? await delivered(doc, signal) : undefined
+      let text = streamed ? await delivered(doc, until) : undefined
+      if (until.aborted) return
       if (text == null) {
         if (!visible()) return
         stage('fetching')
         let res = await fetch(url, {
-          signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+          signal: AbortSignal.any([until, AbortSignal.timeout(10_000)]),
         })
         if (!res.ok) {
           throw new Error(`Operator conversation open: ${res.status}`)
         }
         text = await res.text()
       }
+      if (until.aborted) return
       stage('parsing')
       let page = new DOMParser().parseFromString(text, 'text/html')
       if (!page.querySelector('script[data-operator-chat]')) {
@@ -104,12 +108,15 @@ let open = (slot: HTMLElement): AbortSignal | undefined => {
       answer = page
       show()
     } catch (error) {
-      if (signal.aborted) return
+      if (until.aborted) return
       stage('failed')
       globalThis.reportError?.(error)
       let retry = doc.createElement('button')
       retry.textContent = 'Try again'
-      retry.onclick = () => void load()
+      retry.onclick = () => {
+        if (pending) status.replaceWith(pending)
+        void load(true)
+      }
       let status = doc.createElement('div')
       status.setAttribute('role', 'status')
       status.setAttribute(FAILED, '')
@@ -118,10 +125,11 @@ let open = (slot: HTMLElement): AbortSignal | undefined => {
       if (said) said.replaceWith(status)
       else slot.append(status)
     } finally {
-      reading = false
+      if (attempt == reading) attempt = undefined
     }
   }
   let activated = () => afterPaint(() => void load())
+  retryLoading(slot, () => void load(true), signal)
   view?.addEventListener(VIEWED, activated, { signal })
   frame?.addEventListener(VIEWED, activated, { signal })
   void keptChat(space, person).then((html) => {
@@ -132,7 +140,10 @@ let open = (slot: HTMLElement): AbortSignal | undefined => {
     kept.innerHTML = html
     slot.querySelector(':scope > [data-operator-kept]')?.remove()
     slot.prepend(kept)
-    slot.querySelector('[data-operator-loading]')?.setAttribute('hidden', '')
+    pending?.querySelector('[data-yak-loading-words]')?.setAttribute(
+      'hidden',
+      '',
+    )
     let pane = doc.getElementById('content')
     if (pane && visible()) pane.scrollTop = pane.scrollHeight
   }).catch((e) => globalThis.reportError?.(e))

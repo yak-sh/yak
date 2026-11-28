@@ -43,8 +43,6 @@ import { frame, FRAMED } from './frame.ts'
 import { apex, spaceHost, url } from '@yaks/platform/host'
 import { earlyDraftScript } from '@yaks/platform/operator-early-draft'
 import { BROWSER_ZONE } from '@yaks/platform/local-time'
-import { openingWatchScript } from '@yaks/platform/operator-opening-watch'
-import { PATH as REPORT } from './page-report.ts'
 import {
   backTo,
   chatPath,
@@ -1846,29 +1844,25 @@ let openingParts = (
     here,
     chat,
     main: [
-      column('', [
+      column(
+        '',
         h(
           'div',
           {
-            key: 'slot',
             'data-operator-opening': full,
             'data-operator-stream': streaming ? '' : undefined,
+            'data-yak-loading-stage': 'unbound',
             'data-person': who.person,
             'data-space': space.eid,
           },
           h(
             Loading,
-            { 'data-operator-loading': '' },
+            { state: 'conversation', 'data-operator-loading': '' },
             'Loading conversation…',
           ),
           h('noscript', null, h('a', { href: plain }, 'Open conversation')),
         ),
-        // Says so where the conversation never comes (operator-opening-watch.ts).
-        h('script', {
-          key: 'watch',
-          dangerouslySetInnerHTML: { __html: openingWatchScript(REPORT) },
-        }),
-      ]),
+      ),
       askBox(space, who, open, askingAt(env, space, here, app), ''),
     ],
     skip: ['#ask', 'Skip to the message box'],
@@ -2724,9 +2718,9 @@ let talk = mountTalk({
   pane: () => content,
   onAway: (away) => boxed?.set({ away }),
   older: (take) => { taking = take; read().catch(said) },
-  unfold: async (line) => {
+  unfold: async (line, reading) => {
     let start = talk.from()
-    let response = await ask('${at}?talk=' + encodeURIComponent(talk.task()) + '&line=' + encodeURIComponent(line) + (start == null ? '' : '&from=' + encodeURIComponent(start)))
+    let response = await ask('${at}?talk=' + encodeURIComponent(talk.task()) + '&line=' + encodeURIComponent(line) + (start == null ? '' : '&from=' + encodeURIComponent(start)), AbortSignal.any([signal, reading]))
     if (!response.ok) throw new Error('A fold of line ' + line + ' could not be fetched: ' + response.status)
     return (await response.json()).lines
   },
@@ -2832,15 +2826,15 @@ document.addEventListener('submit', async (event) => {
 // which the edge answers 502 and the Builder restarts, and the page reads past
 // it quietly (the reporter holds what it meets meanwhile). Only a read that
 // failed through all of them is said.
-let ask = async (url) => {
+let ask = async (url, reading = signal) => {
   for (let pause of [1000, 2000, 4000, 8000, null]) {
-    signal.throwIfAborted()
+    reading.throwIfAborted()
     try {
-      let response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(WAIT)]) })
+      let response = await fetch(url, { signal: AbortSignal.any([reading, AbortSignal.timeout(WAIT)]) })
       if (response.status < 500 || pause == null) return response
       response.body?.cancel()
-    } catch (e) { if (signal.aborted || pause == null) throw e }
-    await sleep(pause, signal)
+    } catch (e) { if (reading.aborted || pause == null) throw e }
+    await sleep(pause, reading)
   }
 }
 // The box is ready to type in.
