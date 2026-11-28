@@ -3,6 +3,8 @@
 // where the view put it, without the element React would wrap it in.
 
 import {
+  type ComponentProps,
+  type Context,
   createContext,
   createElement as h,
   type ReactElement,
@@ -10,7 +12,9 @@ import {
   useContext,
 } from 'react'
 
-let Fragments = createContext((html: string): ReactNode =>
+type Draw = (html: string) => ReactNode
+
+let Fragments: Context<Draw> = createContext<Draw>((html) =>
   h('div', { dangerouslySetInnerHTML: { __html: html } })
 )
 
@@ -26,7 +30,10 @@ export let SLOT = 'data-yaks-fragment'
 
 /** `node` with each trusted fragment drawn as an empty template naming it by
  * its place in `fragments`. */
-export let slotted = (node: ReactNode, fragments: string[]) =>
+export let slotted = (
+  node: ReactNode,
+  fragments: string[],
+): ReactElement<ComponentProps<typeof Fragments.Provider>> =>
   h(Fragments.Provider, {
     value: (html: string) =>
       h('template', { [SLOT]: fragments.push(html) - 1 }),
