@@ -1738,15 +1738,20 @@ export let chatPage = async (
 
 /** The main chat's frame and conversation in one response, with the frame
  * first so the browser can draw it and start loading the chat's modules. */
-export let openingChat = async (...args: Parameters<typeof chatPage>) => {
+export let openingChat = async (
+  ready: (() => void) | undefined,
+  ...args: Parameters<typeof chatPage>
+) => {
   let [env, space, who, open, side, chosen, from, c] = args
   let later = chatPage(...args).then(async (res) => {
     if (!res.ok) {
       await res.body?.cancel()
       return ''
     }
+    let html = await res.text()
+    ready?.()
     return `<script type="application/json" data-operator-answer>${
-      script(await res.text())
+      script(html)
     }</script>`
   }).catch((error) => {
     caught(error, { request: 'Operator conversation open', space: space.eid })
@@ -1829,6 +1834,8 @@ let openingParts = (
   if (app) query.set('app', app.slug)
   if (from != null) query.set('from', String(from))
   let full = `${chat}?${query}`
+  query.set('conversation', 'html')
+  let plain = `${chat}?${query}`
   let aside = { turn: null, helpers: [] }
   return {
     title: space.operator,
@@ -1854,7 +1861,7 @@ let openingParts = (
             { 'data-operator-loading': '' },
             'Loading conversation…',
           ),
-          h('noscript', null, h('a', { href: full }, 'Open conversation')),
+          h('noscript', null, h('a', { href: plain }, 'Open conversation')),
         ),
         // Says so where the conversation never comes (operator-opening-watch.ts).
         h('script', {

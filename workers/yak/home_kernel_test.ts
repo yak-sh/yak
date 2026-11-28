@@ -483,9 +483,10 @@ test('a dashboard page reads the directory in one trip', async () => {
   let settings = await timing(managePath('operator', slug))
   assertEquals(/hops;dur=(\d+)/.exec(settings)?.[1], '2')
   assertMatch(settings, /operator_wait;dur=\d+/)
-  // The first chunk has the editor. The same response fills in the
-  // conversation around it.
-  let opening = await k.at('yaks.app', chatPath(slug), { headers: { cookie } })
+  // An explicit browser open sends the editor before the conversation.
+  let opening = await k.at('yaks.app', chatPath(slug) + '?conversation=1', {
+    headers: { cookie, 'sec-fetch-mode': 'navigate' },
+  })
   assertEquals(opening.status, 200)
   let stream = opening.body!.getReader()
   let first = new TextDecoder().decode((await stream.read()).value)
@@ -515,9 +516,22 @@ test('a dashboard page reads the directory in one trip', async () => {
   let path = pending.getAttribute('data-operator-opening')!
   let drawn = await k.at('yaks.app', path, { headers: { cookie } })
   let chat = drawn.headers.get('server-timing') ?? ''
-  assert(parseHTML(await drawn.text()).document.querySelector('#ask textarea'))
+  assert(
+    parseHTML(await drawn.text()).document.querySelector(
+      'script[data-operator-chat]',
+    ),
+  )
   assertEquals(/hops;dur=(\d+)/.exec(chat)?.[1], '2')
   assertMatch(chat, /operator_wait;dur=\d+/)
+  let plain = pending.querySelector('noscript a')!.getAttribute('href')!
+  let withoutScript = await k.at('yaks.app', plain, {
+    headers: { cookie, 'sec-fetch-mode': 'navigate' },
+  })
+  assert(
+    parseHTML(await withoutScript.text()).document.querySelector(
+      'script[data-operator-chat]',
+    ),
+  )
   // A page of the person's own asks only about them, at once.
   for (let view of ['profile', 'shared'] as const) {
     assertEquals(await trips(managePath(view)), '1', view)

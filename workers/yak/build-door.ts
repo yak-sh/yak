@@ -3,7 +3,7 @@
 import { audit } from './admin-action.ts'
 import { jittered, retried } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
-import { ahead, fetchOf, HEARD, WAKE } from './door.ts'
+import { ahead, fetchOf, HEARD, WAKE, WARM } from './door.ts'
 import { apart } from './lib/hops.ts'
 import { background, caught } from './defects.ts'
 import type { Space } from './directory.ts'
@@ -146,23 +146,40 @@ let wake = (
     retain,
   )
 
-let WARM = 10_000
+let WARM_FOR = 10_000
 let warmed = new Map<string, number>()
+
+let starting = (
+  env: Env,
+  space: string,
+  path: string,
+  retain?: (work: Promise<void>) => void,
+): void => {
+  let key = path + space
+  let now = (env.CLOCK ?? system).now()
+  if (now - (warmed.get(key) ?? -Infinity) < WARM_FOR) return
+  warmed.delete(key)
+  warmed.set(key, now)
+  if (warmed.size > 1024) warmed.delete(warmed.keys().next().value!)
+  if (path == WAKE) return wake(env, space, retain)
+  ahead(
+    () => signal(env, space, path),
+    { request: 'operator prepare', space },
+    retain,
+  )
+}
 
 /** Start a space's Operator ahead of a visit once per isolate per warm window.
  * The wake behind an answer that owes work always goes through `wake`. */
 export let woken = (
   env: Env,
   space: string,
-  retain?: (work: Promise<void>) => void,
-): void => {
-  let now = (env.CLOCK ?? system).now()
-  if (now - (warmed.get(space) ?? -Infinity) < WARM) return
-  warmed.delete(space)
-  warmed.set(space, now)
-  if (warmed.size > 1024) warmed.delete(warmed.keys().next().value!)
-  wake(env, space, retain)
-}
+  retain?: (p: Promise<void>) => void,
+) => starting(env, space, WAKE, retain)
+
+/** Start the Builder and load its store modules while the kernel reads the
+ * seat for a conversation. The authorized read opens the store. */
+export let prepared = (env: Env, space: string) => starting(env, space, WARM)
 
 // How long a look at the colo's note may take: a match answers in a few
 // milliseconds, and now and then in seconds (used.ts `GLANCE`), by which time
@@ -176,14 +193,14 @@ let NOTED = 30 * 86_400
 let noteOf = (person: string, slug: string) =>
   new Request(`https://operators.invalid/${person}/${encodeURIComponent(slug)}`)
 
-/** Start the Operator a Dashboard of the space at `slug` asks, as the colo
- * last noted `person` writing there (`noting`), before the read that learns
- * the space answers, so a cold Operator starts beside that read rather than
- * after it. Nothing waits on it; it answers the space the note named. */
+/** Start the Operator of the space at `slug` as the colo last noted it for
+ * `person` (`noting`), while the directory reads their seat. Returns the noted
+ * space so the caller can refresh the note from the authoritative answer. */
 export let foreseen = (
   env: Env,
   person: string,
   slug: string,
+  start: (env: Env, space: string) => void = woken,
 ): Promise<string | null> => {
   let notes = env.OPERATOR_CACHE
   if (!notes || !person) return Promise.resolve(null)
@@ -194,7 +211,7 @@ export let foreseen = (
       env.CLOCK,
     )
     let space = found ? await found.text() : ''
-    if (space) woken(env, space)
+    if (space) start(env, space)
     return space || null
   }).catch((error) => {
     caught(error, { request: 'operator note read' })
@@ -202,8 +219,8 @@ export let foreseen = (
   })
 }
 
-/** Note in the colo the space whose Operator `person`'s Dashboard at `slug`
- * reaches, or none where they write in none there, when the note `said`
+/** Note in the colo the space whose Operator `person` can reach at `slug`,
+ * or none where they write in none there, when the note `said`
  * (`foreseen`) is not that already. */
 export let noting = (
   env: Env,

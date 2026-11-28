@@ -18,8 +18,10 @@ import {
   seated,
   woken,
 } from './build-door.ts'
-import { PLATFORM_OBJECT, WAKE } from './door.ts'
+import { PLATFORM_OBJECT, WAKE, WARM } from './door.ts'
 import { RETRY } from '@yaks/durable-object/alarm'
+import { driver } from '@yaks/durable-object/sql'
+import { tables } from '@yaks/sqlite/physical'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
@@ -321,7 +323,7 @@ let posted = (o: Awaited<ReturnType<typeof seeded>>, path: string) =>
   o.object.fetch(
     new Request(`https://builder${path}`, {
       method: 'POST',
-      headers: path == WAKE
+      headers: path == WAKE || path == WARM
         ? { 'x-yak-kernel': '1' }
         : { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
       body: '{}',
@@ -434,8 +436,13 @@ test("a space's Operator is put back at the kernel's word alone", async () => {
   assertEquals(o.ctx.pitr.aborts, 1)
 })
 
-test('a new incarnation says it owes work in its answers, and takes the work up on a wake', async () => {
+test('a preparation leaves storage untouched and a wake takes up owed work after the read', async () => {
   let o = await seeded()
+  let sql = driver(o.ctx.storage)
+  let beforeWarm = tables(sql)
+  let prepared = await posted(o, WARM)
+  assertEquals(prepared.status, 204)
+  assertEquals(tables(sql), beforeWarm)
   let read = await posted(o, '/operator/conversation')
   await read.text()
   await Promise.all(o.ctx.pending)
@@ -527,11 +534,13 @@ test('speculative wakes share a space window, and owed work still gets its wake'
   assertEquals(wakes, [one, two, one])
 })
 
-test('a wake is the kernel’s alone', async () => {
+test('starting the Builder is the kernel’s alone', async () => {
   let o = await seeded()
-  let r = await o.object.fetch(new Request(`https://builder${WAKE}`))
-  assertEquals(r.status, 403)
-  await r.body?.cancel()
+  for (let path of [WAKE, WARM]) {
+    let r = await o.object.fetch(new Request(`https://builder${path}`))
+    assertEquals(r.status, 403)
+    await r.body?.cancel()
+  }
 })
 
 // Its first request, before anything has made the Operator: the write owes

@@ -1,11 +1,11 @@
 // What a space's Dashboard waits on (T-3990): the directory once, for the
 // space and every part it draws, and its Operator, which a colo's note of the
 // space starts beside that read rather than after it.
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { connector, fresh, signIn } from './probe.ts'
-import { dashboardPath } from '@yaks/platform/routes'
-import { WAKE } from './door.ts'
+import { chatPath, dashboardPath } from '@yaks/platform/routes'
+import { WAKE, WARM } from './door.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import type { Stored } from '@yaks/workerd/cache'
 import { system } from '@yaks/fp'
@@ -109,4 +109,26 @@ test('a Dashboard starts its Operator before the directory answers', async () =>
   held = undefined
   release()
   assertEquals(await page, 200)
+})
+
+test('a full chat prepares its Builder while admission reads the seat', async () => {
+  await open()
+  await k.settled()
+  let directoryRead = Promise.withResolvers<void>()
+  held = directoryRead.promise
+  operator.length = 0
+  let full = k.at('yaks.app', chatPath(slug) + '?conversation=1', {
+    headers: { cookie: them.cookie },
+  })
+  try {
+    await until(() => operator.includes(WARM))
+    assertEquals(operator, [WARM])
+  } finally {
+    held = undefined
+    directoryRead.resolve()
+    let response = await full
+    assertEquals(response.status, 200)
+    await response.text()
+  }
+  assert(operator.includes('/operator/conversation'))
 })

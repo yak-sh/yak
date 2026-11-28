@@ -60,7 +60,7 @@ import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
 import { writes } from '@yaks/member'
 import { type Clock, clock } from './timing.ts'
-import { foreseen, noting, woken } from './build-door.ts'
+import { foreseen, noting, prepared, woken } from './build-door.ts'
 import { DAYS } from './views.ts'
 import { admin } from './tool.ts'
 import { reachOf } from './operator-reach.ts'
@@ -167,16 +167,18 @@ export let manage = async (
   if ('moved' in at) return moved(req, hostUrl(env, at.moved) + url.search)
   let dir = dirOf()
   let page: ReturnType<typeof dir.page> | undefined
-  // The colo's note of the space a Dashboard's Operator is (`foreseen`).
+  // The colo's note of which space's Operator this member reaches.
   let note: Promise<string | null> | undefined
+  let readSeat = false
   let ahead = (person: string) => {
     let reads = req.method == 'GET' || req.method == 'HEAD'
     if ('space' in at) {
-      // A Dashboard asks its Operator once it knows the space, so a cold one
-      // starts now, by the colo's note of which space this is, beside the
-      // read that learns it.
-      if (req.method == 'GET' && at.view == 'dashboard' && !url.search) {
-        note = foreseen(env, person, at.space)
+      let dashboard = at.view == 'dashboard' && !url.search
+      let chat = !!at.open && !url.searchParams.has('attachment')
+      if (req.method == 'GET' && (dashboard || chat)) {
+        note = foreseen(env, person, at.space, (env, space) => {
+          if (!readSeat) (chat ? prepared : woken)(env, space)
+        })
         // When the note answered, and whether it named a space to wake.
         void note.then((space) =>
           reached(space ? 'operator_foreseen' : 'operator_unforeseen', null)
@@ -193,7 +195,6 @@ export let manage = async (
       page.catch(() => {})
       if (reads && !at.door) {
         let drawn = !at.open && !at.logo && !at.manifest && !at.version
-        let chat = !!at.open && !url.searchParams.has('attachment')
         foresee(
           dir,
           person,
@@ -327,6 +328,7 @@ export let manage = async (
     )
   }
   let { space, role, administrative } = reached('page_read', await paged)
+  readSeat = true
   if (caller?.spaceEid && space && caller.spaceEid != space.eid) {
     return json(403, 'not_a_member', 'That token is for another space.')
   }
@@ -470,22 +472,26 @@ export let manage = async (
     )
     if (at.door) return storeAnswer(req, env, space, who, at.door)
     if (chat) {
-      let full = url.searchParams.has('conversation') ||
-        req.headers.get('purpose') == 'prefetch'
-      return reading
-        ? ready((chat == 'new' && !full ? openingChat : chatPage)(
-          env,
-          space,
-          who,
-          chat,
-          sidebar(),
-          chosen,
-          url.searchParams.has('from')
-            ? Number(url.searchParams.get('from'))
-            : undefined,
-          c,
-        ))
-        : nothingHere(env)
+      if (!reading) return nothingHere(env)
+      let conversation = url.searchParams.get('conversation')
+      let document = req.headers.get('sec-fetch-mode') == 'navigate'
+      let stream = chat == 'new' && !lookingAhead(req) &&
+        (conversation == null || document && conversation == '1')
+      let args = [
+        env,
+        space,
+        who,
+        chat,
+        sidebar(),
+        chosen,
+        url.searchParams.has('from')
+          ? Number(url.searchParams.get('from'))
+          : undefined,
+        c,
+      ] as const
+      return stream
+        ? openingChat(canWarm ? warmRoster : undefined, ...args)
+        : ready(chatPage(...args))
     }
     return await operatorAnswer(req, env, space, who) ??
       desk(req, env, dir, space, who, view)

@@ -25,7 +25,7 @@ import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from '@yaks/platform/routes'
 import type { Handoff } from '@yaks/platform/operator-handoff'
-import { HEARD, WAKE } from './door.ts'
+import { HEARD, WAKE, WARM } from './door.ts'
 import { type Tab, tabSaid, tabsState } from '@yaks/notify/whereabouts'
 import { COPY, copying } from './store-copy.ts'
 import { GRAPH, type Graphed } from './operator-graph.ts'
@@ -82,6 +82,14 @@ type Socket = Lent
 // A page reading the Operator's store (operator-api.ts), and where its tab
 // is, once it said.
 type Paged = { read?: { person?: string }; tab?: Tab }
+
+let storeParts = () =>
+  Promise.all([
+    import('./operator-store.ts'),
+    import('@yaks/durable-object/alarm'),
+    import('./operator-host.ts'),
+    import('./operator-api.ts'),
+  ])
 
 export class Builder extends Durable {
   #ctx: State
@@ -174,11 +182,19 @@ export class Builder extends Durable {
    * carries them (hops.ts `reported`, door.ts `metered`).
    */
   override async fetch(request: Request): Promise<Response> {
+    let url = new URL(request.url)
+    // A warm start has no answer to protect from the Operator's work.
+    if (url.pathname == WARM) {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      let [{ operatorPlan }] = await storeParts()
+      await operatorPlan()
+      return new Response(null, { status: 204 })
+    }
     let tally: Tally = new Map()
     this.#asked++
     let answer
     try {
-      answer = await tallying(tally, () => this.#answer(request))
+      answer = await tallying(tally, () => this.#answer(request, url))
     } catch (e) {
       // An object past the rows it may read or write (@yaks/durable-object
       // `bounded`) answers how long to wait, at whichever door met it.
@@ -201,15 +217,11 @@ export class Builder extends Durable {
     this.#asked--
   }
 
-  async #answer(request: Request): Promise<Response> {
-    let url = new URL(request.url)
+  async #answer(request: Request, url: URL): Promise<Response> {
     if (url.pathname == WAKE) {
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
       await this.#stored()
-      // Nobody waits on this answer, so what the incarnation owes goes on
-      // behind it; beside another answer still under way, whose caller wakes
-      // this object again once it has that answer (`OWED`), it waits for that
-      // wake.
+      // The caller wakes us again once it has any other answer still under way.
       if (this.#asked == 1) this.#resume()
       return new Response(null, { status: 204 })
     }
@@ -752,13 +764,12 @@ export class Builder extends Durable {
       () => this.#store = undefined,
       async () => {
         let starting = Date.now()
-        let [{ operatorStore, owing }, { SLICE }, { operatorFrames }] =
-          await elapsed('operator_modules_wait', () =>
-            Promise.all([
-              import('./operator-store.ts'),
-              import('@yaks/durable-object/alarm'),
-              import('./operator-host.ts'),
-            ]))
+        let [
+          { operatorStore, owing },
+          { SLICE },
+          { operatorFrames },
+          { operatorApi },
+        ] = await elapsed('operator_modules_wait', storeParts)
         let drive = () => {
           if (!this.#draining && Date.now() >= this.#until) {
             this.#until = Date.now() + SLICE
@@ -847,7 +858,6 @@ export class Builder extends Durable {
         // `named`).
         let named = (person: string) =>
           dirPart.directoryOf(this.#env.STORE).nameAt(person)
-        let { operatorApi } = await import('./operator-api.ts')
         let { spaceOf } = await import('./operator-root.ts')
         // Its conversations as their pages watch them, drawn with the
         // Operator's name and where a conversation opens.
