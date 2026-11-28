@@ -26,7 +26,7 @@ export let SLOT = 'data-yaks-fragment'
 
 /** `node` with each trusted fragment drawn as an empty template naming it by
  * its place in `fragments`. */
-export let slotted = (node: ReactNode, fragments: string[]): ReactNode =>
+export let slotted = (node: ReactNode, fragments: string[]): ReactElement =>
   h(Fragments.Provider, {
     value: (html: string) =>
       h('template', { [SLOT]: fragments.push(html) - 1 }),
