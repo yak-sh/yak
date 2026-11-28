@@ -22,6 +22,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { readInbox } from '@yaks/inbox/read'
 import type { Thread } from '@yaks/inbox'
 import { markAttention } from '@yaks/notify/attention'
+import { isMade } from '@yaks/platform/operator-docs'
 import { type Choice, showing, shown as shownBy } from '@yaks/task'
 import {
   matchesUpdate,
@@ -95,11 +96,25 @@ let wordsOf = (row: Bundle | undefined) => {
   }
 }
 
+// The doc an update points to, where the Operator made it off the chat
+// (@yaks/platform/operator-docs), among what `abouts` holds.
+let madeFor = (
+  row: Bundle | undefined,
+  abouts: Map<string, Bundle>,
+): Update['doc'] => {
+  let about = abouts.get(String(comp(row, 'notification')?.about))
+  let doc = about && isMade(about) ? comp(about, 'doc') : undefined
+  return doc
+    ? { title: String(doc.title ?? ''), body: String(doc.body ?? '') }
+    : undefined
+}
+
 let updateOf = (
   t: Thread,
   row: Bundle | undefined,
   shown: Shown[] = [],
   from?: Place,
+  doc?: Update['doc'],
 ): Update => {
   let decision = comp(row, 'decision')
   let note = comp(row, 'notification')
@@ -111,6 +126,7 @@ let updateOf = (
     dismissed: t.archived,
     ...wordsOf(row),
     ...note?.about ? { about: String(note.about) } : {},
+    ...doc ? { doc } : {},
     ...from ? { from } : {},
     ...decision
       ? {
@@ -389,7 +405,13 @@ export let updatesOf = async (
   ])
   return {
     updates: shown.map(({ t, row }, i) =>
-      updateOf(t, row, shows.get(t.eid), places[i])
+      updateOf(
+        t,
+        row,
+        shows.get(t.eid),
+        places[i],
+        madeFor(row, abouts),
+      )
     ),
     waiting: waitingIn(kept),
     expires: expiresIn(kept),
@@ -409,13 +431,17 @@ let keptOf = async (
   let threads = (await threadsOf(store, person, space, archived || !!q))
     .filter((t) => q || t.archived == archived)
   let rows = await store.g.get(threads.map((t) => t.eid))
-  let matching = threads.flatMap((t, i) =>
-    lapsed(rows[i], now) || q && !matchesUpdate(q, wordsOf(rows[i]))
-      ? []
-      : [{ t, row: rows[i] }]
+  let live = threads.flatMap((t, i) =>
+    lapsed(rows[i], now) ? [] : [{ t, row: rows[i] }]
   )
+  let abouts = await aboutsOf(store, live.map(({ row }) => row))
+  // A search reads the doc an update points to as well as its own words.
+  let matching = q
+    ? live.filter(({ row }) =>
+      matchesUpdate(q, { ...wordsOf(row), doc: madeFor(row, abouts) })
+    )
+    : live
   let held = matching.map(({ row }) => row)
-  let abouts = await aboutsOf(store, held)
   let reports = await reportsOf(store, held, abouts)
   let kept = matching.filter(({ t }) => !reports.has(t.eid))
   kept.sort((a, b) =>

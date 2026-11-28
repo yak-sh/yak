@@ -1132,6 +1132,19 @@ export class Builder extends Durable {
             let { noteBackfill } = await import('@yaks/platform/operator-notes')
             return backfill(noteBackfill(store))
           },
+          // A call's notes kept only as an Update's words, each moved into a
+          // doc of its own that the Update points to
+          // (@yaks/platform/operator-docs).
+          made: async () => {
+            let { madeBackfill } = await import('@yaks/platform/operator-docs')
+            let { rootAt } = await import('./operator-root.ts')
+            return backfill(
+              madeBackfill(
+                store,
+                (space, person) => rootAt(store, space, person),
+              ),
+            )
+          },
           // The vectors its recall ranks by meaning, drained behind the
           // object's own work (@yaks/embedding `sleeper`).
           vectors: () => {

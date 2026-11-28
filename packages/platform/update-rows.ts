@@ -46,8 +46,12 @@ export type Update = {
   words: string
   /** A notice's line naming the app and what happened. */
   subject?: string
-  /** What it tells of: an app, the space, or a task of the Operator's. */
+  /** What it tells of: an app, the space, a task of the Operator's, or a
+   * doc it made (`doc`). */
   about?: string
+  /** The doc it points to, which the Operator made off the chat, such as a
+   * call's notes (./operator-docs.ts). */
+  doc?: { title: string; body: string }
   /** Where it came from: its conversation, opened in the chat at the entry
    * it was written from. */
   from?: Place
@@ -74,9 +78,10 @@ export let updateFilter = (params: URLSearchParams): UpdateFilter => {
 
 export let matchesUpdate = (
   q: string,
-  { subject, words }: Pick<Update, 'subject' | 'words'>,
+  { subject, words, doc }: Pick<Update, 'subject' | 'words' | 'doc'>,
 ): boolean => {
-  let text = `${subject ?? ''}\n${words}`.toLowerCase()
+  let text = [subject ?? '', words, doc?.title ?? '', doc?.body ?? '']
+    .join('\n').toLowerCase()
   return q.toLowerCase().split(/\s+/).every((word) => text.includes(word))
 }
 

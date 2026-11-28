@@ -233,6 +233,7 @@
     "./operator-owner": "./operator-owner.ts",
     "./operator-handoff": "./operator-handoff.ts",
     "./operator-memory": "./operator-memory.ts",
+    "./operator-docs": "./operator-docs.ts",
     "./operator-notes": "./operator-notes.ts",
     "./operator-source": "./operator-source.ts",
     "./operator-words": "./operator-words.ts",

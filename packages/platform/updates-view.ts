@@ -116,6 +116,17 @@ let form = (
 let words = (text: string) =>
   h('div', { className: 'Update_Words' }, markdown(text))
 
+// The doc an update points to, opened in place.
+let opened = (u: Update) =>
+  u.doc
+    ? h(
+      More,
+      { mod: 'quiet', className: 'Update_Doc' },
+      h(More.Summary, {}, `Read ${u.doc.title || 'it'}`),
+      h(More.Body, {}, words(u.doc.body)),
+    )
+    : null
+
 // When it happened, said the human way.
 let stamp = (u: Update) => h(Time, { at: u.at, className: 'Update_When' })
 
@@ -449,6 +460,7 @@ let drawCard = (
     },
     head(u, subject(u), where, away),
     words(u.words),
+    opened(u),
     h(
       'p',
       { className: 'Update_Meta' },

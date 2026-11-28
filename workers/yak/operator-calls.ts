@@ -771,7 +771,7 @@ export let ASK = {
 export let TAKE_NOTES = {
   name: 'take_notes',
   description:
-    'Someone asked you to take notes, keep minutes or a transcript of this call, or to sum it up afterwards: call it once, with no words, and keep listening. Everything said on the call is kept as text, and when it ends the Operator writes the notes from it and puts them in their Updates. Never say you cannot take notes or have no recording.',
+    'Someone asked you to take notes, keep minutes or a transcript of this call, or to sum it up afterwards: call it once, with no words, and keep listening. Everything said on the call is kept as text, and when it ends the Operator writes the notes from it, keeps them in the space and tells them in their Updates. Never say you cannot take notes or have no recording.',
   parameters: { type: 'object', properties: {} },
 }
 
@@ -1419,10 +1419,11 @@ export let transcriptOf = (rows: Bundle[], name: string) =>
  * Notes of `call`, written now from every line its conversation kept
  * (`transcriptOf`), when they were asked for on it (`TAKE_NOTES`, chat-voice
  * `voice_notes`), or `always`: the call's lines go to the Operator in that
- * conversation on the `notes` channel, whose answer is put in Updates
- * (operator-channels.ts). Lines written into notes once are not again: the
- * request is named by the call and how many lines it had. Answers whether a
- * request was written.
+ * conversation on the `notes` channel, about the line where the call began,
+ * whose answer is kept as a doc that Updates point to (operator-channels.ts,
+ * @yaks/platform/operator-docs). Lines written into notes once are not
+ * again: the request is named by the call and how many lines it had. Answers
+ * whether a request was written.
  */
 export let notesOf = async (
   store: Pick<Operator['store'], 'g'>,
@@ -1437,6 +1438,7 @@ export let notesOf = async (
   }
   let lines = transcriptOf(rows, space.operator ?? 'the Operator')
   if (!lines.length) return false
+  let began = rows.find((r) => part(r, 'operator_call')?.began)
   await receive(
     store as Operator['store'],
     {
@@ -1445,6 +1447,7 @@ export let notesOf = async (
       channel: NOTES,
       via: ticket.via,
       reply_to: ticket.to,
+      ...began ? { about: began.entity.eid } : {},
     },
     lines.join('\n'),
     {

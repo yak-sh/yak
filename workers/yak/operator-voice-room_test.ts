@@ -288,9 +288,22 @@ test('a voice room call with lines and a notes request yields notes when it ends
     ),
     true,
   )
-  let notes = await store.g.read('.notification&*')
-  equal(notes.map((n) => [(n.notification as Comp).to, n.doc]), [[
-    space.eid,
+  // The notes are a doc of their own, everyone's in the space, made from
+  // the request about the line where the call began; the notice in
+  // Updates points to it.
+  let [doc] = await store.g.read('.doc&.output&*')
+  equal([doc.doc, doc.owner], [
     { title: 'Notes of the Discord call', body: '- The barn opens Friday.' },
+    undefined,
+  ])
+  let [asked] = await store.g.get([String((doc.output as Comp).source)])
+  let [began] = await store.g.get([
+    String((asked.operator_request as Comp).about),
+  ])
+  equal((began.operator_call as Comp).began, true)
+  let notes = await store.g.read('.notification&*')
+  equal(notes.map((n) => [n.notification, (n.doc as Comp).title]), [[
+    { to: space.eid, about: doc.entity.eid },
+    'Notes of the Discord call',
   ]])
 })
