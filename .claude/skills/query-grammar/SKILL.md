@@ -119,9 +119,12 @@ a component is refused with the properties that hold one: `.topic~=moss` answers
 An operator written with spaces around it (`.doc.title ~= cake`) is refused with
 the clause it meant. A path followed by no operator the grammar has
 (`.web.url~cloudflare`, `.individual?created`) is refused with the operators it
-has: part of a value is `~=`, and there is no bare `~`, with or without the dot
-(`doc.title~copy` is refused, not searched as words). A path through a reference
-goes on with the target's own `comp.prop` (`.filed.project.doc.title~=yak`), and
+has. A lone `~` or a clause such as `doc.title~copy` is refused with a `~=`
+example. When a dotted path names a component where a property belongs, the
+refusal suggests the conjunction, such as `.space&.doc.title` for
+`.space.doc.title`. For a missing property declared elsewhere, it names the
+qualified alternatives. A path through a reference goes on with the target's
+own `comp.prop` (`.filed.project.doc.title~=yak`), and
 the entity's id is `.entity.eid` (`.eid=T-12` reads the same, since every entity
 has one eid). A kind's name where no component has it reads as the components
 the kind is: for a kind `booking` that is `seat` and `venue`, `.booking` is

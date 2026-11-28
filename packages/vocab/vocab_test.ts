@@ -1290,6 +1290,10 @@ test('an unknown property is refused with what its component holds', () => {
           title: { type: 'string' },
         },
       },
+      speech: {
+        component: true,
+        properties: { voice: { type: 'string' } },
+      },
     },
     kinds: { alias: { with: { book: true } } },
   })
@@ -1305,6 +1309,12 @@ test('an unknown property is refused with what its component holds', () => {
       'alias: a stable name for an entity',
   )
   assertThrows(() => w.aim('alias.title'), Unknown, 'title is book.title')
+  assertThrows(() => w.aim('alias.voice'), Unknown, '.speech.voice')
+  assertThrows(() => w.aim('alias.loan.title'), Unknown, '.alias&.loan.title')
+  assertEquals(w.aim('loan.of.book.title'), [
+    { comp: 'loan', prop: 'of' },
+    { comp: 'book', prop: 'title' },
+  ])
   // a slip is told the name it was closest to, and the spine's id is its eid
   // an operator word is taught the grammar's form, not a spelling neighbour
   assertEquals(

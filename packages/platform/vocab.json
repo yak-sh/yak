@@ -1254,7 +1254,7 @@
         "voice": {
           "$id": "urn:uuid:0a325cbf-a037-4f2d-8b25-9d4c7d3a5218",
           "type": "string",
-          "description": "retired: what a space's Operator store takes onto its persona's speech{} or cache{} on its first read, from before they were its persona's"
+          "description": "Legacy copy of .speech.voice on the persona in the space’s Operator store. The store migrates this field on its first read."
         },
         "voice_speed": {
           "$id": "urn:uuid:8f775512-9364-43d1-863b-75af4ee7769b",

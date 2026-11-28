@@ -906,7 +906,12 @@ export let unknownWord = (
  * was closer to (a marker has no properties to be close to), the component is
  * explained by its description, the one place what it means is said, such as
  * where a value it does not hold is read instead. */
-export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
+export let unknownProps = (
+  v: Vocab,
+  comp: string,
+  props: string[],
+  tail?: string[],
+): string => {
   let own = [...comp == SPINE ? [EID] : [], ...v.props(comp)]
   let near = [...new Set(props.flatMap((p) => nearest(p, own)))]
   let first = (c: string) =>
@@ -924,10 +929,14 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
     ]
   })
   // A component named as a property (`person.email`) is worn beside it.
-  let worn = through.length ? [] : props.flatMap((p) => {
+  let worn = props.flatMap((p) => {
     if (p == comp || !v.comp(p)) return []
-    let f = first(p)
     let presence = `.${comp}&.${p}`
+    if (tail?.length && v.prop(p, tail[0])) {
+      return [`${presence}.${tail.join('.')}`]
+    }
+    if (through.length) return []
+    let f = first(p)
     return [
       f ? `${presence}.${f}=… or ${presence} for presence` : presence,
     ]
@@ -939,7 +948,17 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
     : []
   let named = props.flatMap((p) => {
     let paths = companions.filter((c) => v.prop(c, p)).map((c) => `${c}.${p}`)
-    return paths.length ? [`${p} is ${paths.join(' or ')}`] : []
+    if (paths.length) return [`${p} is ${paths.join(' or ')}`]
+    if (!tail) return []
+    let elsewhere = v.all.flatMap((c) => {
+      let prop = v.prop(c, p)
+      if (c == comp || !prop) return []
+      let about = gist(prop.description)
+      return [`.${c}.${p}${about ? ` (${about})` : ''}`]
+    })
+    return elsewhere.length
+      ? [`Components declaring ${p} include ${elsewhere.join(' or ')}`]
+      : []
   })
   // An operator word put after a component (`.task.in=a,b`).
   let ops = props.flatMap((p) => {
@@ -1440,7 +1459,9 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
           continue
         }
         let p = prop(c, b)
-        if (!p) refuse(`${a}.${b}`, unknownProps(v, out(c), [b]))
+        if (!p) {
+          refuse(`${a}.${b}`, unknownProps(v, out(c), [b], segs.slice(i + 2)))
+        }
         hops.push({ comp: out(c), prop: p! })
       }
       aimed.set(key, frozen(hops))

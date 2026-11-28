@@ -465,6 +465,7 @@ test('.doc.title^cake is refused with the operators', () => {
 // A `~` short of its `=` is refused with the match it meant.
 for (
   let [token, meant] of [
+    ['.doc.title~', '.doc.title~='],
     ['.web.url~cloudflare', '.web.url~=cloudflare'],
     ['doc.title~copy', '.doc.title~=copy'],
     ['.deploy{message~"Saved a minute"}', '.deploy.message~="Saved a minute"'],
@@ -478,6 +479,19 @@ for (
     )
   })
 }
+
+test('a standalone tilde suggests the contains operator', () => {
+  assertThrows(
+    () => parse('~'),
+    SyntaxError,
+    '.doc.title~=cake',
+  )
+  assertThrows(
+    () => parse('.doc.title ~ "two words"'),
+    SyntaxError,
+    '.doc.title~="two words"',
+  )
+})
 
 // Kept app releases still send suffix presence and optional forms; each reads
 // as the prefix form it has now, in a strict query too.

@@ -77,6 +77,7 @@ roundTrips('text and quoted-term query', [
   '"comp.prop=1"',
   '"*"',
   '"?*"',
+  '"~"',
   '"(x"',
   '"a,b"',
 ])

@@ -69,7 +69,7 @@ export let listed = (values: Iterable<Input>): string =>
 let word = (s: string): string => {
   let clause = true
   try {
-    clause = s == '*' || s == '?*' || parseDot(s) != null
+    clause = s == '*' || s == '?*' || s == '~' || parseDot(s) != null
   } catch { /* a malformed clause is not a word either */ }
   return clause || /[\s&|(),"'[\]]|^$/.test(s) ? quoted(s) : s
 }

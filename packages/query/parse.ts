@@ -483,7 +483,7 @@ export let parseDot = (token: string): Clause[] | null => {
       throw spelled(token, `${head}&${rest}`)
     }
     // `.web.url~cloudflare`: a match on part of a value, short of its `=`.
-    if (/^~[^=]/.test(rest)) {
+    if (rest.startsWith('~')) {
       throw spelled(token, `${dotted ? '' : '.'}${head}~=${rest.slice(1)}`)
     }
     throw unknown(token)
@@ -813,7 +813,7 @@ let read = (tok: string, opts: ParseOpts, old: string[]): Clause[] => {
 
 let clauses = (toks: string[], opts: ParseOpts, old: string[]): Clause[] =>
   toks.flatMap((tok, i) => {
-    if (ALONE.test(tok)) throw stray(toks, i)
+    if (tok == '~' || ALONE.test(tok)) throw stray(toks, i)
     return parts(tok, toks[i - 1], toks[i + 1]).flatMap((p) =>
       read(p, opts, old)
     )
@@ -824,14 +824,15 @@ let clauses = (toks: string[], opts: ParseOpts, old: string[]): Clause[] =>
 // it reads as something else, so it is refused with the clause it was part of.
 let ALONE = new RegExp(`${OPS.source}$`)
 let stray = (toks: string[], i: number): SyntaxError => {
-  let [before, op, after] = [toks[i - 1], toks[i], toks[i + 1]]
+  let [before, token, after] = [toks[i - 1], toks[i], toks[i + 1]]
+  let op = token == '~' ? '~=' : token
   let meant = before && after
     ? before + op + after
     : op.includes('-')
     ? `.requires${op}T-42`
     : `.doc.title${op}cake`
   return new SyntaxError(
-    `${op} stands alone: an operator joins a property and its value with ` +
+    `${token} stands alone: an operator joins a property and its value with ` +
       `no spaces (${meant})`,
   )
 }
