@@ -71,26 +71,26 @@ afterAll(() => globalThis.fetch = real)
 let id_token = `e30.${
   btoa(JSON.stringify({ email: 'jeff@example.com' })).replace(/=+$/, '')
 }.sig`
-// Nango: the sign-ins it was asked for, by integration, which the person
-// finished there. Calendar's token is A1, Gmail's G1.
-let signing = new Map<string, string>()
+// Nango: the sign-ins it was asked for, by integration, as their sessions'
+// tags, which the person finished there. Calendar's token is A1, Gmail's G1.
+let signing = new Map<string, Record<string, string>>()
 let nango = async (r: Request, url: URL) => {
   if (r.method == 'POST') {
     let asked = await r.json()
-    signing.set(asked.allowed_integrations[0], asked.tags.end_user_id)
+    signing.set(asked.allowed_integrations[0], asked.tags)
     return Response.json({
       data: { connect_link: 'https://connect.nango.dev/?session_token=s' },
     })
   }
   if (url.pathname == '/connections') {
     let integration = url.searchParams.get('integrationId')!
-    let eid = signing.get(integration)
+    let tags = signing.get(integration)
     return Response.json({
-      connections: eid
+      connections: tags
         ? [{
           connection_id: `n-${integration}`,
           provider_config_key: integration,
-          tags: { end_user_id: eid },
+          tags,
         }]
         : [],
     })

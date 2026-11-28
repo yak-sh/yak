@@ -455,6 +455,35 @@
         }
       }
     },
+    "approving": {
+      "$id": "urn:uuid:93377e61-7da4-4a2f-9b09-a003aee87468",
+      "component": true,
+      "type": "object",
+      "description": "a mark on a connection whose sign-in finished at its broker under an account other than the address of the person who began it: the grant is held there, attaching nothing, until that account confirms it by the link mailed to it, or declines. One unanswered for a day is forgotten at the broker",
+      "properties": {
+        "id": {
+          "$id": "urn:uuid:99e0176f-aa3c-418a-89e9-b191f69bf9d2",
+          "type": "string",
+          "description": "the broker's own id for the held grant"
+        },
+        "account": {
+          "$id": "urn:uuid:f6d5c74a-9c8f-482f-b7ef-63be2cff73b0",
+          "type": "string",
+          "description": "the account that approved at the service, which is asked to confirm; empty where the service named none"
+        },
+        "began": {
+          "$id": "urn:uuid:5612104d-ecf0-4431-abfa-65f91d2fafdc",
+          "type": "string",
+          "description": "the verified address of the person who began the connect"
+        },
+        "at": {
+          "$id": "urn:uuid:c24ff8a4-9e88-426f-a462-476c29aa58ac",
+          "type": "string",
+          "format": "date-time",
+          "description": "when the grant was held"
+        }
+      }
+    },
     "uses": {
       "$id": "urn:uuid:ead2830f-a3ac-4811-b42a-53da5916adc3",
       "component": true,

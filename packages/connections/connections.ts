@@ -108,6 +108,7 @@ import { type Broker, BrokerError, brokerOf, type Grant } from './brokers.ts'
 
 let SECRET = 'secret'
 let RECONNECTING = 'reconnecting'
+let APPROVING = 'approving'
 let EDGE = 'edge'
 
 /** An explicit account name did not select one connection: a refusal of the
@@ -207,6 +208,8 @@ export type Given = { key: string; expect?: Status } | {
 } | {
   /** the broker's own id for a sign-in that finished there (`settle`) */
   brokered: string
+  /** its grant, where the broker was already asked for it */
+  grant?: Grant
 }
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
@@ -1314,11 +1317,14 @@ export let lacking = (i: Integration, scopes: string[]): string[] => {
  * hold until they return. `again` signs a connection in again in place,
  * asking for every scope its integration now asks for: the same row, the
  * apps using it and its account, with a new grant. A brokered one is marked
- * `reconnecting` until `settle` finds the new grant at the broker. */
+ * `reconnecting` until `settle` finds the new grant at the broker. `began` is
+ * the verified address of the person beginning it, which a brokered sign-in
+ * must come back from to attach at once (`settle`). */
 export let begin = async (
   c: Ctx,
   connection: Eid,
   again = false,
+  began?: string,
 ): Promise<{ url: string; attempt?: Attempt & { verifier: string } }> => {
   let b = await held(c.graph.read, connection)
   if (!again) await admitting(c, b)
@@ -1330,7 +1336,11 @@ export let begin = async (
     if (!i.built && !i.owner && Array.isArray(i.categories)) {
       await broker.enable(i.broker.integration, i.connects ?? 'signin')
     }
-    let url = await broker.begin(i.broker.integration, connection)
+    let url = await broker.begin(
+      i.broker.integration,
+      connection,
+      began?.toLowerCase(),
+    )
     if (again) {
       await c.graph.apply([{ entity: { eid: connection }, [RECONNECTING]: {} }])
     }
@@ -1403,38 +1413,121 @@ let brokering = async (c: Ctx, name: string): Promise<Broker> => {
 /** Connect a connection whose sign-in finished at its integration's broker,
  * once it has; nothing while it has not, or for one that is not needed or
  * not brokered. A broker's sign-in never returns to us, so whoever reads a
- * needed connection settles it: nothing waits on the broker telling us. */
+ * needed connection settles it: nothing waits on the broker telling us.
+ *
+ * A broker's link opens in any browser, so the account that approved there
+ * may not be the beginner's. A grant attaches at once only when the account
+ * it names is the address `begin` was given. Any other is held, attaching
+ * nothing, and the connection is marked `approving` with the account that
+ * approved, for that account to confirm (`approve`) or decline (`decline`).
+ * The answer is the bundles written: the mark, when one is new, is the
+ * caller's cue to ask the account. A hold unanswered for a day is forgotten
+ * at the broker. */
 export let settle = async (
   c: Ctx,
   connection: Eid,
 ): Promise<Bundle[]> => {
   let b = await held(c.graph.read, connection)
   let again = b[RECONNECTING] as Comp | undefined
-  if (comp(b, CONNECTION).status == 'connected' && !again) return []
+  let waiting = b[APPROVING] as Comp | undefined
+  let connected = comp(b, CONNECTION).status == 'connected' && !again
+  if (connected && !waiting) return []
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
   if (!i?.broker) return []
   let broker = await brokerOf(c.vault, i.broker.name, c.fetch)
-  let id = await broker?.found(i.broker.integration, connection)
-  if (!again) return id ? connect(c, connection, { brokered: id }) : []
-  // Signing in again leaves a new grant at the broker beside the one kept,
-  // which goes once the connection holds the new one.
-  let keeps = records<Kept>(c.graph, c.vault, '')
-  let kept = await keeps.read(nameOf(b))
-  if (!id || id == kept?.id) {
-    let stale = (c.now ?? Date.now)() - Date.parse(String(again.at)) > HOUR
+  if (!broker) return []
+  let { integration } = i.broker
+  let now = (c.now ?? Date.now)()
+  if (waiting && now - Date.parse(String(waiting.at)) > DAY) {
+    await broker.forget(integration, String(waiting.id))
+    return c.graph.apply([{ entity: { eid: connection }, [APPROVING]: null }])
+  }
+  if (connected) return []
+  let found = await broker.found(integration, connection)
+  let kept = again
+    ? await records<Kept>(c.graph, c.vault, '').read(nameOf(b))
+    : undefined
+  if (!found || found.id == kept?.id || found.id == waiting?.id) {
+    // Signing in again that found nothing new within the hour is let go.
+    let stale = again && now - Date.parse(String(again.at)) > HOUR
     return stale
       ? c.graph.apply([{ entity: { eid: connection }, [RECONNECTING]: null }])
       : []
   }
-  let out = await connect(c, connection, { brokered: id })
-  let now = await keeps.read(nameOf(b))
-  if (now?.id == id && kept?.id && kept.broker && kept.integration) {
+  let grant = await broker.grant(integration, found.id)
+  let account = await grantAccount(c, i, grant)
+  if (!account || account != found.began) {
+    if (waiting) {
+      await broker.forget(integration, String(waiting.id))
+        .catch(c.report ?? (() => {}))
+    }
+    return c.graph.apply([{
+      entity: { eid: connection },
+      [APPROVING]: {
+        id: found.id,
+        account: account ?? '',
+        at: new Date(now).toISOString(),
+        ...found.began ? { began: found.began } : {},
+      },
+    }])
+  }
+  return adopt(c, b, found.id, grant)
+}
+
+/** Connect the grant held for its approver (`settle`), once the account that
+ * approved confirms it: `id` is the broker's id the hold names. Nothing for a
+ * hold that is gone or names another grant. */
+export let approve = async (
+  c: Ctx,
+  connection: Eid,
+  id: string,
+): Promise<Bundle[]> => {
+  let b = await held(c.graph.read, connection)
+  if (comp(b, APPROVING).id != id) return []
+  return adopt(c, b, id)
+}
+
+/** Forget the grant held for its approver at the broker, when the account
+ * that approved declines it. Nothing for a hold that is gone or names
+ * another grant. */
+export let decline = async (
+  c: Ctx,
+  connection: Eid,
+  id: string,
+): Promise<Bundle[]> => {
+  let b = await held(c.graph.read, connection)
+  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
+  if (comp(b, APPROVING).id != id || !i?.broker) return []
+  await (await brokering(c, i.broker.name)).forget(i.broker.integration, id)
+  return c.graph.apply([{ entity: { eid: connection }, [APPROVING]: null }])
+}
+
+// Connect the broker's grant `id` into `b`. Signing in again leaves the new
+// grant at the broker beside the one kept, which goes once the connection
+// holds the new one.
+let adopt = async (c: Ctx, b: Bundle, id: string, grant?: Grant) => {
+  let keeps = records<Kept>(c.graph, c.vault, '')
+  let kept = b[RECONNECTING] ? await keeps.read(nameOf(b)) : undefined
+  let out = await connect(c, b.entity.eid, { brokered: id, grant })
+  let now = kept && await keeps.read(nameOf(b))
+  if (
+    now?.id == id && kept?.id && kept.id != id && kept.broker &&
+    kept.integration
+  ) {
     await (await brokering(c, kept.broker)).forget(kept.integration, kept.id)
       .catch(c.report ?? (() => {}))
   }
   return out
 }
 
+// The account a broker's grant names, lower-cased: the broker's word, else
+// what the service says of the token.
+let grantAccount = async (c: Ctx, i: Integration, g: Grant) =>
+  (g.account ??
+    await accountOf(i, g, c.fetch ?? fetch).catch(() => undefined))
+    ?.toLowerCase()
+
+let DAY = 86_400_000
 let HOUR = 3_600_000
 
 // A needed connection given its key or grant is one more its owner holds,
@@ -1517,11 +1610,10 @@ export let connect = async (
   if ('brokered' in given) {
     if (!i?.broker) throw new Error(`${i?.name} is not brokered`)
     let { name, integration } = i.broker
-    let g = await (await brokering(c, name)).grant(integration, given.brokered)
+    let g = given.grant ??
+      await (await brokering(c, name)).grant(integration, given.brokered)
     Object.assign(tokens, keptGrant(name, integration, given.brokered, g))
-    account = g.account ??
-      await accountOf(i, g, c.fetch ?? fetch).catch(() => undefined) ??
-      account
+    account = await grantAccount(c, i, g) ?? account
     made = { broker: name, ...g.scopes ? { scopes: g.scopes } : {} }
   } else {
     await (await signIn(c, b, tokens)).complete(given.attempt, given.callback)
@@ -1599,6 +1691,7 @@ let keepGrant = async (
         ...account ? { account } : {},
       },
       ...target[RECONNECTING] ? { [RECONNECTING]: null } : {},
+      ...target[APPROVING] ? { [APPROVING]: null } : {},
     },
     ...out.flatMap((
       l,

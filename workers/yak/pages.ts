@@ -377,7 +377,10 @@ export let page = (env: Host, at: Said, ...parts: Kids[]) =>
     env,
     esc(at.title),
     markup(onSite(env, [
-      at.lead == null ? null : [h('h1', null, at.title), h('p', null, at.lead)],
+      at.lead == null ? null : [
+        h('h1', { key: 'title' }, at.title),
+        h('p', { key: 'lead' }, at.lead),
+      ],
       parts,
     ])),
     at.status ?? 200,

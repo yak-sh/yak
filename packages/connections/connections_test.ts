@@ -35,6 +35,7 @@ import { brokerKey } from './brokers.ts'
 import {
   AccountError,
   accountOf,
+  approve,
   attach,
   begin,
   borrowed,
@@ -1786,7 +1787,7 @@ test('a brokered sign-in is settled at its broker, and its token is the brokerâ€
       connections: [{
         connection_id: 'n1',
         provider_config_key: 'google-mail',
-        tags: { end_user_id: eid },
+        tags: { end_user_id: eid, end_user_email: 'ann@example.com' },
       }],
     }],
     'GET /connections/n1': () => [200, {
@@ -1800,7 +1801,7 @@ test('a brokered sign-in is settled at its broker, and its token is the brokerâ€
     'DELETE /connections/n1': () => [204, {}],
   })
   c.fetch = nango.fetch
-  assertEquals(await begin(c, eid), {
+  assertEquals(await begin(c, eid, false, 'Ann@Example.com'), {
     url: 'https://connect.nango.dev/?session_token=s',
   })
   await settle(c, eid)
@@ -1854,7 +1855,7 @@ test('signing in again at a broker keeps the row and takes the new grant once it
       connections: ids.map((id) => ({
         connection_id: id,
         provider_config_key: 'google-mail',
-        tags: { end_user_id: eid },
+        tags: { end_user_id: eid, end_user_email: 'ann@example.com' },
         created: id,
       })),
     }],
@@ -1922,13 +1923,14 @@ test('a connection its broker no longer holds is broken', async () => {
       connections: [{
         connection_id: 'n1',
         provider_config_key: 'google-mail',
-        tags: { end_user_id: eid },
+        tags: { end_user_id: eid, end_user_email: 'ann@example.com' },
       }],
     }],
     'GET /connections/n1': () =>
-      gone
-        ? [424, { error: { code: 'invalid_credentials' } }]
-        : [200, { credentials: { access_token: 'T1' } }],
+      gone ? [424, { error: { code: 'invalid_credentials' } }] : [200, {
+        connection_config: { emailAddress: 'ann@example.com' },
+        credentials: { access_token: 'T1' },
+      }],
   }).fetch
   // Nothing finished yet is no failure: a sign-in not made is not settled.
   let none = await setup()
@@ -1946,6 +1948,48 @@ test('a connection its broker no longer holds is broken', async () => {
   gone = true
   await assertRejects(() => credential(c, eid), Error, 'invalid_credentials')
   assertEquals(of(await at(g, eid), 'connection').status, 'broken')
+})
+
+test("a broker's grant from another account than the beginner's is held for that account, and forgotten after a day", async () => {
+  let { g, c, needs } = await setup()
+  await g.apply([...await install(g.read, [MAIL]), brokerKey('nango', 'nk')], {
+    trusted: true,
+  })
+  let eid = await needs({ integration: 'mail' })
+  let nango = nangoAt({
+    'GET /connections?': () => [200, {
+      connections: [{
+        connection_id: 'n1',
+        provider_config_key: 'google-mail',
+        tags: { end_user_id: eid, end_user_email: 'ann@example.com' },
+      }],
+    }],
+    'GET /connections/n1': () => [200, {
+      connection_config: { emailAddress: 'bob@example.com' },
+      credentials: { access_token: 'T1' },
+    }],
+    'DELETE /connections/n1': () => [200, {}],
+  })
+  c.fetch = nango.fetch
+  let [held] = await settle(c, eid)
+  assertEquals(of(held, 'approving'), {
+    ...of(held, 'approving'),
+    id: 'n1',
+    account: 'bob@example.com',
+    began: 'ann@example.com',
+  })
+  // Read again, it is the same hold: nothing new, nobody asked twice.
+  assertEquals(await settle(c, eid), [])
+  assertEquals(await approve(c, eid, 'n2'), [])
+  assertEquals(of(await at(g, eid), 'connection').status, 'needed')
+  c.now = () => Date.now() + 86_400_001
+  await settle(c, eid)
+  assertEquals((await at(g, eid))!.approving, undefined)
+  assert(
+    nango.asked.includes(
+      'DELETE /connections/n1?provider_config_key=google-mail',
+    ),
+  )
 })
 
 test('an app request for a catalog integration prepares its broker at sign-in', async () => {

@@ -143,7 +143,8 @@ export type Shown = {
   binding: string
   /** live apps in this space that the owner may attach */
   available: { app: string; title: string }[]
-  /** why it is not finished yet: the note on its `provisional` mark */
+  /** why it is not finished yet: the note on its `provisional` mark, or
+   * the account a brokered grant waits on to confirm it */
   saving: string
   /** how to get its key, as its integration says */
   instructions: string

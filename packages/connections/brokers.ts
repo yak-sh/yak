@@ -62,6 +62,10 @@ export type Listing = {
   popular?: boolean
 }
 
+/** A sign-in that finished at a broker: the broker's own id for it, and the
+ * address of the person who began it, as `begin` was told. */
+export type Found = { id: string; began?: string }
+
 /** One broker, for the integration it calls `integration`, and our
  * connection's eid as the tag it finds a sign-in by. */
 export type Broker = {
@@ -71,10 +75,11 @@ export type Broker = {
   /** make ready to sign people in to the service it calls `integration`, as
    * `listing` says it connects; one already ready is left as it is */
   enable(integration: string, connects: Listing['connects']): Promise<void>
-  /** the link a person follows to sign in for connection `eid` */
-  begin(integration: string, eid: string): Promise<string>
-  /** the broker's own id for the sign-in made for `eid`, once one finished */
-  found(integration: string, eid: string): Promise<string | undefined>
+  /** the link a person follows to sign in for connection `eid`, begun by
+   * the person whose verified address is `began` */
+  begin(integration: string, eid: string, began?: string): Promise<string>
+  /** the newest sign-in made for `eid`, once one finished */
+  found(integration: string, eid: string): Promise<Found | undefined>
   /** the grant's current token, refreshed by the broker when it is due, or
    * at once with `fresh` */
   grant(integration: string, id: string, fresh?: boolean): Promise<Grant>
@@ -273,11 +278,15 @@ export let nango = (key: string, fetcher: Fetch = fetch): Broker => {
         }),
       })
     },
-    begin: async (integration, eid) => {
+    // Nango's link opens in any browser, so whoever follows it may not be
+    // who began it. The session's tags name both the connection and the
+    // beginner's address (Nango's `end_user_email`), and each connection made
+    // through it carries them back.
+    begin: async (integration, eid, began) => {
       let made = await ask('/connect/sessions', {
         method: 'POST',
         body: JSON.stringify({
-          tags: { end_user_id: eid },
+          tags: { end_user_id: eid, ...began ? { end_user_email: began } : {} },
           allowed_integrations: [integration],
         }),
       })
@@ -295,13 +304,19 @@ export let nango = (key: string, fetcher: Fetch = fetch): Broker => {
       let { connections } = await ask(`/connections?${q}`) as {
         connections?: Record<string, unknown>[]
       }
-      let mine = (connections ?? [])
+      let tags = (c: Record<string, unknown>) =>
+        (c.tags ?? {}) as Record<string, unknown>
+      let [newest] = (connections ?? [])
         .filter((c) =>
-          c.provider_config_key == integration &&
-          (c.tags as Record<string, unknown> | undefined)?.end_user_id == eid
+          c.provider_config_key == integration && tags(c).end_user_id == eid
         )
         .sort((a, b) => String(b.created).localeCompare(String(a.created)))
-      return mine[0] ? String(mine[0].connection_id) : undefined
+      if (!newest) return undefined
+      let began = tags(newest).end_user_email
+      return {
+        id: String(newest.connection_id),
+        ...typeof began == 'string' ? { began: began.toLowerCase() } : {},
+      }
     },
     grant: async (integration, id, fresh) => {
       let c = await ask(

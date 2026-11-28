@@ -27,6 +27,7 @@ import type { Bundle } from '@yaks/graph'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import {
+  APPROVE,
   barred,
   CALLBACK,
   callback,
@@ -1858,4 +1859,137 @@ test('the Connections page restores a chosen old key after its connection was re
     (await s.shown()).list.find((one) => one.eid == recoveredEid)?.status,
     'connected',
   )
+})
+
+// Nango, as far as a Gmail connect asks it: the session it makes, tagged as
+// `begin` asked, and the sign-in finished there once someone approves at
+// Google, under the account `approved` names. The beginner signs in to
+// yaks.app as ada@example.com.
+let brokered = async () => {
+  let s = await setup()
+  await s.at.apply([
+    brokerKey('nango', 'nk'),
+    { entity: { eid: s.person }, email: { address: 'ada@example.com' } },
+  ], KERNEL)
+  let nango = {
+    tags: {} as Record<string, string>,
+    approved: '',
+    forgot: [] as string[],
+  }
+  let real = globalThis.fetch
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    let r = new Request(input, init)
+    let u = new URL(r.url)
+    if (u.host != 'api.nango.dev') return real(r)
+    if (r.method == 'POST' && u.pathname == '/connect/sessions') {
+      nango.tags = (await r.json()).tags
+      return Response.json({
+        data: { connect_link: 'https://connect.nango.dev/?session_token=s' },
+      })
+    }
+    if (u.pathname == '/connections') {
+      return Response.json({
+        connections: nango.approved
+          ? [{
+            connection_id: `n-${nango.approved}`,
+            provider_config_key: 'google-mail',
+            tags: nango.tags,
+          }]
+          : [],
+      })
+    }
+    if (r.method == 'DELETE') {
+      nango.forgot.push(decodeURIComponent(u.pathname.split('/').at(-1)!))
+      return Response.json({})
+    }
+    return Response.json({
+      connection_config: { emailAddress: nango.approved },
+      credentials: {
+        access_token: 'G1',
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      },
+    })
+  }
+  let gmail = async () =>
+    (await s.shown()).list.find((c) => c.integration == 'gmail')
+  // The letters written about the connection, as their bodies.
+  let mailed = async () =>
+    (await s.at.query(line`.mail.target=${(await gmail())!.eid}&*`))
+      .map((b) => String(comp(b, 'doc').body))
+  // The link a letter carries, opened (GET) or answered (POST).
+  let answer = async (link: string, chose?: string) => {
+    let form = new FormData()
+    if (chose) form.set('answer', chose)
+    let req = new Request(link, chose ? { method: 'POST', body: form } : {})
+    let res = await callback({ env: s.p.env, req, path: APPROVE, space: null })
+    return parseHTML(await res!.text()).document.querySelector('h1')
+      ?.textContent
+  }
+  return {
+    ...s,
+    nango,
+    gmail,
+    mailed,
+    answer,
+    [Symbol.dispose]: () => (globalThis.fetch = real),
+  }
+}
+
+test("a Gmail connect approved at Nango by an account not the beginner's attaches nothing until that account confirms", async () => {
+  using s = await brokered()
+  let sent = await s.post({ do: 'add', integration: 'gmail' }) as Response
+  // What the beginner holds is Nango's link, which opens anywhere; the
+  // session names them by their verified address.
+  assertEquals(
+    sent.headers.get('location'),
+    'https://connect.nango.dev/?session_token=s',
+  )
+  assertEquals(s.nango.tags.end_user_email, 'ada@example.com')
+  // Bob opens it and approves his mailbox; no browser of the beginner's
+  // takes any part. The beginner then opens their Connections page.
+  s.nango.approved = 'bob@example.com'
+  let held = await s.gmail()
+  assertEquals([held?.status, held?.account || undefined], [
+    'needed',
+    undefined,
+  ])
+  assertStringIncludes(held!.saving, 'bob@example.com')
+  // Bob, and only Bob, is written to once, with a link that asks him.
+  let [letter, ...more] = await s.mailed()
+  assertEquals(more, [])
+  assertStringIncludes(letter, 'ada@example.com began this connect')
+  let link = /https:\S+/.exec(letter)![0]
+  assertEquals(await s.answer(link), 'Connect Gmail?')
+  assertEquals((await s.gmail())?.status, 'needed')
+  // Declining forgets his grant at Nango, and the link opens nothing more.
+  assertEquals(await s.answer(link, 'decline'), 'Not connected')
+  assertEquals(s.nango.forgot, ['n-bob@example.com'])
+  assertEquals(await s.answer(link, 'connect'), 'Nothing to confirm')
+  assertEquals((await s.gmail())?.status, 'needed')
+})
+
+test('a Gmail connect held for its approver connects once that account confirms', async () => {
+  using s = await brokered()
+  await s.post({ do: 'add', integration: 'gmail' })
+  s.nango.approved = 'bob@example.com'
+  await s.shown()
+  let [letter] = await s.mailed()
+  let link = /https:\S+/.exec(letter)![0]
+  assertEquals(await s.answer(link, 'connect'), 'Connected')
+  assertEquals([(await s.gmail())?.status, (await s.gmail())?.account], [
+    'connected',
+    'bob@example.com',
+  ])
+  assertEquals(s.nango.forgot, [])
+})
+
+test("a Gmail connect approved by the beginner's own address connects at once, and asks nobody", async () => {
+  using s = await brokered()
+  await s.post({ do: 'add', integration: 'gmail' })
+  s.nango.approved = 'ada@example.com'
+  assertEquals([(await s.gmail())?.status, (await s.gmail())?.account], [
+    'connected',
+    'ada@example.com',
+  ])
+  assertEquals(await s.mailed(), [])
 })

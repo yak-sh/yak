@@ -84,6 +84,7 @@ export type Use =
   | 'service-request' // an app's request for a person's service operations
   | 'service-consent' // approval from the platform's service consent page
   | 'connect' // a connection's sign-in, on its way back (connections.ts)
+  | 'approving' // an account's answer to a brokered connect held for it (connections.ts)
   | 'line' // a person's own number's SMS callback (operator-line.ts)
   | 'held' // a number a space bought's SMS callback (numbers.ts)
   | 'call' // a call's audio stream, from its ring to its space (operator-calls.ts)

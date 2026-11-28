@@ -55,6 +55,7 @@ import {
 // refused rather than kept.
 import {
   ABOUT,
+  approve,
   attach,
   begin,
   bindingOf,
@@ -69,6 +70,7 @@ import {
   connectable,
   CONNECTION,
   type Ctx,
+  decline,
   disconnect,
   envOf,
   fieldsOf,
@@ -141,6 +143,8 @@ import { telling } from '@yaks/platform/cookie'
 import { background, caught } from './defects.ts'
 import { apart, elapsed, reached } from './lib/hops.ts'
 import { running } from './running.ts'
+import { opened, seal } from './lib/token.ts'
+import { mail } from './mail.ts'
 import { within } from '@yaks/fp'
 import { domainOf, lapsed, vouched, type Who, whoIs } from './session.ts'
 import { held as live } from './browser-sessions.ts'
@@ -154,6 +158,9 @@ import { adopting, BROKER, instructionsOf, offersOf } from './catalog.ts'
 
 /** Where a service sends a person back after they sign in there. */
 export let CALLBACK = '/connections/callback'
+/** Where the account that approved a brokered connect begun by someone else
+ * answers it, from the link mailed to it (`approving`). */
+export let APPROVE = '/connections/approve'
 /** Where yaks.app's OAuth client says what it is: the URL that is its id at a
  * service taking Client ID Metadata Documents, as ElevenLabs' MCP does. */
 export let CLIENT = '/connections/client.json'
@@ -272,7 +279,8 @@ let admitted = async (env: Env, owner: string) => {
 /** Settle each needed connection `owners` hold through a brokered
  * integration (@yaks/connections `settle`), or through `integration` alone
  * (one name, or several), and each one they began signing in to again there
- * (`reconnecting`): a sign-in that finished at its broker, which never sends
+ * (`reconnecting`), or held there for the account that approved it
+ * (`approving`): a sign-in that finished at its broker, which never sends
  * the person back to us. Whoever reads a person's connections settles theirs
  * first, so nothing waits on the broker telling us. */
 export let settling = async (
@@ -291,13 +299,15 @@ export let settling = async (
     ? (await Promise.all([
       due(line`&.${CONNECTION}.status=needed`),
       due(line`&.reconnecting`),
+      due(line`&.${APPROVING}`),
     ])).flat()
     : []
   return await settled(env, needed, (name) => known(read, name))
 }
 
 /** Settle each of `rows` that is a needed connection through a brokered
- * integration, as `named` reads it → how many it connected. A
+ * integration, as `named` reads it → how many it changed: connected, or
+ * held for the account that approved it (`askApprover`). A
  * broker that fails is ours to hear about, and the connection stays needed
  * for the next read. */
 let settled = async (
@@ -310,13 +320,20 @@ let settled = async (
   let c = ctxOf(env)
   let needed = rows.filter((b) =>
     b[CONNECTION] &&
-    (comp(b, CONNECTION).status == 'needed' || b.reconnecting)
+    (comp(b, CONNECTION).status == 'needed' || b.reconnecting ||
+      b[APPROVING])
   )
   let made = await Promise.all(needed.map(async (b) => {
     let i = await named(integrationOf(b))
     if (!i?.broker) return 0
     try {
-      if (!(await settle(c, b.entity.eid)).length) return 0
+      let out = await settle(c, b.entity.eid)
+      let held = out.find((o) => APPROVING in o)
+      if (held) {
+        if (held[APPROVING]) await askApprover(env, b, i, comp(held, APPROVING))
+        return 1
+      }
+      if (!out.length) return 0
       await ready(env, b.entity.eid)
       await rebound(env, await usersOf(env, b.entity.eid))
       return 1
@@ -893,7 +910,7 @@ export let connectionsOf = async (
         binding: bindingOf(String(c.integration)),
         available: (c.owner == here.eid ? available : [])
           .filter((app) => !to.some((l) => comp(l, 'edge').from == app.app)),
-        saving: String(comp(b, PROVISIONAL).note ?? ''),
+        saving: waitsOn(b) || String(comp(b, PROVISIONAL).note ?? ''),
         instructions,
         failed: failed
           ? String(
@@ -1392,7 +1409,12 @@ let signingIn = async (
   again = false,
   binding?: string,
 ): Promise<Response> => {
-  let { url: to, attempt } = await begin(c, eid, again)
+  let { url: to, attempt } = await begin(
+    c,
+    eid,
+    again,
+    await dirOf(env).emailAt(who.person!) ?? undefined,
+  )
   // A brokered sign-in returns to its broker, and is settled from there.
   if (!attempt) {
     return new Response(null, { status: 303, headers: { location: to } })
@@ -1768,6 +1790,7 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
       headers: { 'cache-control': 'public, max-age=3600' },
     })
   }
+  if (path == APPROVE) return await approving(req, env)
   if (path != CALLBACK && path != CONNECTION_INSTALL) return null
   if (path == CONNECTION_INSTALL) {
     return (await import('./connection-install.ts')).choose(req, env)
@@ -1923,6 +1946,133 @@ let confirming = async (
         `the space ${space} on yaks.app, for its Operator and apps to use. ` +
         `${beginner ?? 'Someone'} began this connect in another browser. ` +
         'Connect it only if that was you, or you mean to give them your account.',
+      headers: PRIVATE,
+    },
+    approveConnect(pathname + search),
+  )
+}
+
+// The mark on a connection whose brokered grant waits for the account that
+// approved it (@yaks/connections `settle`).
+let APPROVING = 'approving'
+
+// What a connection held for the account that approved it waits on, as its
+// row says it; empty for one not held.
+let waitsOn = (b: Bundle) => {
+  let { account } = comp(b, APPROVING)
+  if (!b[APPROVING]) return ''
+  return account
+    ? `Approved by ${account}, which isn't your address: waiting for it ` +
+      'to confirm by the link we mailed it'
+    : "Approved by an account the service didn't name, so nothing was connected"
+}
+
+// What the link mailed to an approving account carries.
+type Approval = { connection: string; id: string }
+
+// Whose a connection is, as a letter or page names it.
+let whose = async (env: Env, b: Bundle) => {
+  let owner = String(comp(b, CONNECTION).owner)
+  let at = await dirOf(env).at(owner)
+  return at
+    ? `the space ${at.title || at.slug} on yaks.app`
+    : 'an account on yaks.app'
+}
+
+// A brokered grant held because the account that approved it is not the
+// beginner's (`settle`): that account is mailed, once per held grant, a link
+// to confirm or decline it. Only the account the service named is ever
+// written to.
+let askApprover = async (
+  env: Env,
+  b: Bundle,
+  i: Integration,
+  held: Comp,
+) => {
+  let to = String(held.account ?? '')
+  if (!to.includes('@') || !env.SESSION_SECRET) return
+  let t = await seal(
+    'approving',
+    { connection: b.entity.eid, id: String(held.id) } satisfies Approval,
+    env.SESSION_SECRET,
+  )
+  let link = `${url(env, APPROVE)}?t=${encodeURIComponent(t)}`
+  let service = i.title || i.name
+  let began = held.began ? String(held.began) : 'Someone'
+  await mail(env)({
+    to,
+    subject: `Connect your ${service} to yaks.app?`,
+    body: `You just gave ${service} access to ${to}. ${began} began this ` +
+      `connect, for ${await whose(env, b)}, and nothing is connected until ` +
+      `you confirm it here:\n\n${link}\n\nIf that wasn't you, or you don't ` +
+      `mean to give them your account, decline, or ignore this letter: the ` +
+      `access is forgotten in a day.`,
+    about: b.entity.eid,
+  })
+}
+
+// The page the link mailed to an approving account opens (`askApprover`): which
+// service, whose it would be and who began it, with Connect and Decline.
+// Opening it changes nothing, so a mail scanner's fetch spends nothing; a
+// press answers the hold, and a link whose hold is answered or gone opens
+// nothing.
+let approving = async (req: Request, env: Env): Promise<Response> => {
+  let { page } = await import('./pages.ts')
+  let t = new URL(req.url).searchParams.get('t') ?? ''
+  let asked = env.SESSION_SECRET
+    ? await opened<Approval>('approving', t, env.SESSION_SECRET)
+    : null
+  let [b] = asked
+    ? await readOf(env)(
+      line`.entity.eid=${asked.connection}&.${CONNECTION}&?${APPROVING}`,
+    )
+    : []
+  let held = b && comp(b, APPROVING)
+  if (!asked || !held || held.id != asked.id) {
+    return page(env, {
+      title: 'Nothing to confirm',
+      lead: 'This link was already answered, or the access it asked about ' +
+        'was forgotten. Nothing of yours is connected by it.',
+      headers: PRIVATE,
+    })
+  }
+  let i = await known(readOf(env), integrationOf(b))
+  let service = i?.title || integrationOf(b)
+  let space = await whose(env, b)
+  let form = req.method == 'POST'
+    ? await req.formData().catch(() => null)
+    : null
+  let chose = form?.get('answer')
+  let c = ctxOf(env)
+  if (chose == 'decline') {
+    await decline(c, asked.connection, asked.id)
+    return page(env, {
+      title: 'Not connected',
+      lead: `Nothing of yours was connected to ${space}, and the access ` +
+        'you gave is forgotten. You can close this page.',
+      headers: PRIVATE,
+    })
+  }
+  if (chose == 'connect') {
+    await approve(c, asked.connection, asked.id)
+    await ready(env, asked.connection)
+    await rebound(env, await usersOf(env, asked.connection))
+    return page(env, {
+      title: 'Connected',
+      lead: `Your ${service} is connected to ${space}.`,
+      headers: PRIVATE,
+    })
+  }
+  let { approveConnect } = await import('@yaks/platform/connections-view')
+  let { pathname, search } = new URL(req.url)
+  return page(
+    env,
+    {
+      title: `Connect ${service}?`,
+      lead: `The ${service} account ${held.account} would be connected to ` +
+        `${space}, for its Operator and apps to use. ` +
+        `${held.began || 'Someone else'} began this connect. Connect it ` +
+        'only if that was you, or you mean to give them your account.',
       headers: PRIVATE,
     },
     approveConnect(pathname + search),
