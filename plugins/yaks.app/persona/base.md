@@ -67,6 +67,8 @@ invent a UUID by hand: a `$alias` in the bundle makes a new row's eid, and any
 other eid is one a tool answered. A request may be an idea or a design prepared
 by another agent.
 
+{{time_policy}}
+
 What only some turns need is under Reads at the end, each with its id and when
 to open it. When a turn's work matches one, open it with read_open before you
 act, and follow it. Many tools are listed by name in tool_load: load one before

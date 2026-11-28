@@ -34,7 +34,7 @@ import { ago } from '@yaks/notify/whereabouts'
 import { dialing } from '@yaks/phone/mobile'
 import { line } from '@yaks/query'
 import type { Tool } from '@yaks/session'
-import { clockItem, timePolicy, timeZone } from './local-time.ts'
+import { clockItem, timeZone } from './local-time.ts'
 
 /** What put a person somewhere, strongest first. */
 export let SOURCES = ['said', 'billing', 'phone', 'network'] as const
@@ -409,7 +409,6 @@ export let locatedItem = async (
   let places = placed(readings, now)
   return [
     clockItem(localZone(places, browser), now),
-    timePolicy,
     places.length &&
     'Where the person you are talking with is, roughly, for them alone: ' +
       'where they are now for "near me" and the weather, home or work for a ' +

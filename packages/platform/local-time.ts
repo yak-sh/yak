@@ -18,7 +18,7 @@ export let timeZone = (value: unknown): string | undefined => {
 
 /** How the Operator talks about instants sent to it by tools and the system. */
 export let timePolicy: string =
-  'When you speak or write a time, use the time zone that matters. Use the person’s local time for their own times, including when something happened or when they asked to be reminded. For an event or place with its own time zone, use that zone. If the zone differs from the person’s, state the time zone itself beside the time, for example “2:15 p.m. Central Daylight Time.” Use the zone they explicitly ask for. Convert raw UTC timestamps before mentioning them, using the offset for the date in question. If you need a local zone and do not know it, ask. The person’s local clock is private to them.'
+  'Use the person’s local time for their own times, including when something happened or when they asked to be reminded. For an event or place, use the time zone at that location. When that zone differs from the person’s, put its time-zone name or abbreviation beside the time, even if you already named the city. For example, “In Paris, it starts at 3:15 p.m. Central European Time.” Use any zone they explicitly ask for. Convert raw UTC timestamps before mentioning them, using the offset for the date in question. If you need a local zone and do not know it, ask. The person’s local clock is private to them.'
 
 /** The clock at the start of this turn, with the date and current offset. */
 export let clockItem = (zone: string | undefined, now = Date.now()): string => {

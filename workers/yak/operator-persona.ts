@@ -44,6 +44,7 @@ import {
 } from './speech.ts'
 import { speechFrom } from '@yaks/speech'
 import { BASE } from '@yaks/platform/operator-model'
+import { timePolicy } from '@yaks/platform/local-time'
 
 /** The persona every Operator is worn on, kept in the directory: the file
  * plugins/yaks.app/persona/base.md, as each doc's eid is its file's name, and
@@ -66,13 +67,14 @@ export let bases = (env: Pick<Env, 'STORE' | 'META' | 'CLOCK'>): Reads => ({
 })
 
 // What the base's files leave to the platform to say: what a free space
-// holds, and what the Plus plan costs and adds (@yaks/platform/plans), which starting.md
-// tells someone signing up.
+// holds, what the Plus plan costs and adds, and how the Operator says times
+// in writing and on a call.
 let slots = () => ({
   free_apps: String(FREE.apps),
   free_emails: String(LETTERS.free),
   plus_price: String(PRICE.plus),
   plus_emails: LETTERS.plus.toLocaleString('en-US'),
+  time_policy: timePolicy,
 })
 
 /** Keep the base in the directory as plugins/yaks.app/persona says it,

@@ -85,7 +85,7 @@ test('a new turn gets the person’s latest browser clock and relevant-zone guid
   let { env, dir } = platform('operator-local-time')
   let person = crypto.randomUUID()
   await dir.stamp({ entities: [{ entity: { eid: person }, person: {} }] })
-  let space = await owned({ dir, person }, 'clock-home')
+  let space = (await dir.at(await owned({ dir, person }, 'clock-home')))!
   let store = operatorMemory()
   let turns: Ask[] = []
   let operator = operating(
@@ -100,17 +100,12 @@ test('a new turn gets the person’s latest browser clock and relevant-zone guid
       })
     }),
   )
-  handleChannels(operator, env, { chat: () => Promise.resolve({}) })
   for (let zone of ['Asia/Kathmandu', 'Pacific/Auckland']) {
     let req = new Request('https://yaks.app', {
       headers: { [BROWSER_ZONE]: zone },
     })
     await connected(env, person, req)
-    await receive(
-      store,
-      { space, person, channel: 'chat' },
-      'What time is it for me?',
-    )
+    await operator.ask({ person }, space, { say: 'What time is it for me?' })
     await drain(store)
     let context = turns.at(-1)?.turnContext?.flatMap((item) =>
       item.kind == 'instruction' && item.text.includes('current local time')
@@ -118,7 +113,11 @@ test('a new turn gets the person’s latest browser clock and relevant-zone guid
         : []
     ).join('\n') ?? ''
     ok(context.includes(`(${zone})`))
-    ok(context.includes('For an event or place with its own time zone'))
+    ok(
+      turns.at(-1)?.instructions?.includes(
+        'even if you already named the city',
+      ),
+    )
   }
 })
 

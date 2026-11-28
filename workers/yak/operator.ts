@@ -178,7 +178,7 @@ import { textPerson, textSend } from './operator-texts.ts'
 import { kept as kernelDir, whereaboutsShow } from './whereabouts.ts'
 import { updatesList } from './operator-glance.ts'
 import { placeSet } from '@yaks/platform/located'
-import { clockItem, timePolicy } from '@yaks/platform/local-time'
+import { clockItem } from '@yaks/platform/local-time'
 import { nameSet } from '@yaks/platform/named'
 import {
   acquainted,
@@ -3153,7 +3153,7 @@ export let operating = (
         // Their local clock and places (located.ts).
         kernelDir(env).then((dir) => locatedItem(dir, o.person)).catch((e) => {
           failed('operator located')(e)
-          return `${clockItem(undefined)}\n${timePolicy}`
+          return clockItem(undefined)
         }),
         member().then((m) => threadsItem(store, session, m)).catch(
           failed('operator threads'),
