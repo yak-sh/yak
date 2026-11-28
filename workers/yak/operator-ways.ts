@@ -13,7 +13,7 @@ import { enabling, managePath } from '@yaks/platform/routes'
 import { mailFrom } from '@yaks/platform/host'
 import { shown } from '@yaks/phone'
 import type { chatRows } from './connections.ts'
-import { phoneAt } from './phones.ts'
+import { phoneAddress } from './phones.ts'
 import { caught } from './defects.ts'
 import type { Place, Unset } from './chat.ts'
 
@@ -30,7 +30,7 @@ export type Ways = {
 }
 
 /** How `space`'s Operator is reached, read for its page: each number from
- * configuration (phones.ts `phoneAt`), its chat platforms from its chat
+ * configuration (phones.ts `phoneAddress`), its chat platforms from its chat
  * connections `rows`, which its page read in its one directory trip
  * (manage.ts `beside`). A platform that cannot be read leaves the rest. */
 export let waysOf = async (
@@ -40,15 +40,15 @@ export let waysOf = async (
   rows: Awaited<ReturnType<typeof chatRows>>,
 ): Promise<Ways> => {
   let [texts, calls, chat] = await Promise.all([
-    phoneAt(env, space.sender),
-    phoneAt(env),
+    phoneAddress(env, space.sender),
+    phoneAddress(env),
     import('./chat.ts').then((c) => c.reached(env, rows)).catch((e) => {
       caught(e, { request: 'operator reach chat' })
       return { places: [], unset: [] }
     }),
   ])
-  let text = texts?.transport().number
-  let call = calls?.caller ? calls.transport().number : undefined
+  let text = texts?.number
+  let call = calls?.calling ? calls.number : undefined
   return {
     email: mailFrom(space.slug, null, env),
     ...text ? { text } : {},

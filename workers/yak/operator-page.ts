@@ -136,7 +136,7 @@ import {
 } from './operator-draw.ts'
 import { PICTURES, reply, textual, trouble } from '@yaks/session/conversation'
 import { DOCUMENTS } from '@yaks/platform/documents'
-import { phoneAt } from './phones.ts'
+import { phoneAddress } from './phones.ts'
 import { icons } from './icons.ts'
 import {
   ALL,
@@ -1171,8 +1171,8 @@ export let operatorBody = async (
   ] = await Promise.all([
     settingsAt(env, seen, who),
     reachOf(dir, walkTo(seen.slug, seen.eid), person),
-    phoneAt(env, seen.sender),
-    phoneAt(env),
+    phoneAddress(env, seen.sender),
+    phoneAddress(env),
     personRows(dir, person, ALERTING),
     personRows(dir, person, TEXTING),
     personRows(dir, person, ACCOUNT),
@@ -1210,8 +1210,8 @@ export let operatorBody = async (
     })),
     address: mailFrom(space.slug, null, env),
     sub: subdomainMail(env, space),
-    from: phone?.transport().number,
-    call: platform?.caller ? platform.transport().number : undefined,
+    from: phone?.number,
+    call: platform?.calling ? platform.number : undefined,
     offer: offered(keys, space),
     key: pushKey(env),
     chats: chats.map(({ platform, bot, user, kept, servers }) => ({

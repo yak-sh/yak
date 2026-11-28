@@ -145,7 +145,6 @@ let namingOf = async (
   named: Named,
 ): Promise<Naming> => {
   let calls = entries.flatMap((b) => b.call ? [comp(b, 'call')!] : [])
-  let tools = await store.g.get([...new Set(calls.map((c) => String(c.to)))])
   let integrations = [
     ...new Set(
       calls.flatMap((c) =>
@@ -153,6 +152,12 @@ let namingOf = async (
       ),
     ),
   ]
+  let [tools, person, ids, logos] = await Promise.all([
+    store.g.get([...new Set(calls.map((c) => String(c.to)))]),
+    personOf(store, entries, named),
+    idsOf(store, entries),
+    integrations.length && store.logos ? store.logos(integrations) : undefined,
+  ])
   return {
     tools: Object.fromEntries(
       tools.filter(Boolean).map((b) => {
@@ -160,11 +165,9 @@ let namingOf = async (
         return [b.entity.eid, { name, title, step }]
       }),
     ),
-    person: await personOf(store, entries, named),
-    ids: await idsOf(store, entries),
-    ...integrations.length && store.logos
-      ? { logos: await store.logos(integrations) }
-      : {},
+    person,
+    ids,
+    ...logos ? { logos } : {},
   }
 }
 

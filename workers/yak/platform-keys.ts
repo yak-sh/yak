@@ -10,6 +10,7 @@
 // reaches every isolate within about that.
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { overlaid } from '@yaks/host/config'
+import { turns } from '@yaks/fp'
 import { line } from '@yaks/query'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
@@ -28,6 +29,7 @@ type Held = {
   env: Record<string, unknown>
   /** when the keys were last read */
   at: number
+  turn: ReturnType<typeof turns>
 }
 
 // By the env the isolate was handed, and by its overlay, so keying an
@@ -45,13 +47,19 @@ export let keyed = async <E extends object>(env: E): Promise<E> => {
   let first = h.at == -Infinity
   if (!first) h.at = now
   let read = inFlight(held, h, async () => {
+    // Overlapping cold requests share the completed keys. Each waits in its
+    // own request context so a cancelled request cannot swallow its wake.
+    let { ready, end, gone } = h.turn()
     try {
+      await ready
+      if (first && h.at != -Infinity) return
       let keys = await platformKeys(h.base)
-      if (h.at <= now) h.keys = keys
+      if (!gone()) h.keys = keys
     } catch (e) {
       caught(e, { request: 'platform keys' })
     } finally {
-      h.at = Math.max(h.at, now)
+      if (!gone()) h.at = Math.max(h.at, now)
+      end()
     }
   })
   if (first) await read
@@ -72,7 +80,7 @@ let overlay = (env: object): Held => {
   let h = held.get(env)
   if (h) return h
   let base = env as Record<string, unknown>
-  let made: Held = { base, keys: {}, env: base, at: -Infinity }
+  let made: Held = { base, keys: {}, env: base, at: -Infinity, turn: turns() }
   made.env = overlaid(base, () => made.keys)
   held.set(env, made)
   held.set(made.env, made)

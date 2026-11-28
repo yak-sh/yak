@@ -17,7 +17,7 @@ import { directoryOf, seeding, stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
 import { meta } from './meta.ts'
 import { invokePackage } from './package-tools.ts'
-import { phoneNamed, phoneOf, textable } from './phones.ts'
+import { phoneAddress, phoneNamed, phoneOf, textable } from './phones.ts'
 import { keyed } from './platform-keys.ts'
 import { connector, fresh as kernel, signIn } from './probe.ts'
 import type { Env } from './env.ts'
@@ -60,8 +60,8 @@ let given = async (
 // A fresh env, as a new isolate is handed one.
 let fresh = (vars: object = {}) => ({ ...p.env, ...vars })
 
-test('looking for an unknown phone does not read provider credentials', async () => {
-  let env = fresh()
+test('reading a phone address or looking for an unknown provider does not read credentials', async () => {
+  let env = fresh({ PHONE_SENDER: { via: 'telnyx', number: '+18885550100' } })
   let { STORE } = env
   let reads = 0
   env.STORE = {
@@ -72,6 +72,10 @@ test('looking for an unknown phone does not read provider credentials', async ()
     },
   }
   assertEquals(await phoneNamed(env, 'unconfigured'), undefined)
+  assertEquals(await phoneAddress(env), {
+    number: '+18885550100',
+    calling: true,
+  })
   assertEquals(reads, 0)
 })
 
@@ -273,6 +277,32 @@ test('keying is idempotent: an env and its keyed env key to one object', async (
     true,
     true,
   ])
+})
+
+test('overlapping cold callers load the platform credentials once', async () => {
+  await given('deepgram', 'DEEPGRAM_API_KEY', 'speech-key')
+  let env = fresh()
+  let { STORE } = env
+  let appReads = 0
+  env.STORE = {
+    ...STORE,
+    get: (id) => {
+      let store = STORE.get(id)
+      return {
+        ...store,
+        fetch: (req) => {
+          if (new URL(req.url).searchParams.get('q')?.includes('.app.store=')) {
+            appReads++
+          }
+          return store.fetch(req)
+        },
+      }
+    },
+  }
+  let [first, second] = await Promise.all([keyed(env), keyed(env)])
+  assertEquals([first, second], [await keyed(env), first])
+  assertEquals(first.DEEPGRAM_API_KEY, 'speech-key')
+  assertEquals(appReads, 1)
 })
 
 test("ElevenLabs speaks on yaks.app's key for a space without its own, charged to the space", async () => {

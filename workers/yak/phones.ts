@@ -41,10 +41,35 @@ export let phoneNamed = async (
   env: Env,
   via: string,
 ): Promise<Phone | undefined> => {
+  let phone = await named(env, via)
+  if (phone) await keyed(env)
+  return phone
+}
+
+let named = async (env: Env, via: string) => {
   let all = await configured(keysOn(env))
-  if (!Object.hasOwn(all, via)) return undefined
-  await keyed(env)
-  return all[via]
+  return Object.hasOwn(all, via) ? all[via] : undefined
+}
+
+let selected = async (env: Env, chosen?: Transport) => {
+  let base = env.PHONE_SENDER
+  let via = chosen?.via ?? base?.via
+  let phone = via ? await named(env, via) : undefined
+  if (!phone) return undefined
+  let { via: _, ...more } = { ...base?.via == via ? base : {}, ...chosen }
+  return {
+    phone: phone.over(more),
+    platform: phone.over(base && base.via == via ? base : {}),
+  }
+}
+
+/** The number and call capability a page can display from configuration. */
+export let phoneAddress = async (env: Env, chosen?: Transport) => {
+  let found = await selected(env, chosen)
+  return found && {
+    number: found.phone.transport().number,
+    calling: !!found.phone.caller,
+  }
 }
 
 /**
@@ -57,16 +82,10 @@ export let phoneAt = async (
   env: Env,
   chosen?: Transport,
 ): Promise<Phone | undefined> => {
-  let base = env.PHONE_SENDER
-  let via = chosen?.via ?? base?.via
-  let phone = via ? await phoneNamed(env, via) : undefined
-  if (!phone) return undefined
-  let { via: _, ...more } = { ...base?.via == via ? base : {}, ...chosen }
-  return guarded(
-    env,
-    phone.over(more),
-    phone.over(base && base.via == via ? base : {}),
-  )
+  let found = await selected(env, chosen)
+  if (!found) return undefined
+  await keyed(env)
+  return guarded(env, found.phone, found.platform)
 }
 
 // Every outgoing text, including queued work with an old assignment, asks

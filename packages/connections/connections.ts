@@ -89,6 +89,8 @@ import {
   type Integration,
   keyed,
   known,
+  knownAll,
+  knownIn,
   type Read,
   set,
   told,
@@ -226,6 +228,7 @@ let strs = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : []
 let ALL = line`&*`
 
 let nameOf = (b: Bundle): string => String(comp(b, SECRET).name)
+let integrated = (b: Bundle): string => String(comp(b, CONNECTION).integration)
 
 // A new connection, needing a credential, under a name of its own.
 let fresh = (owner: Eid, integration: string, scopes: string[]): Bundle => {
@@ -1016,22 +1019,29 @@ export let used = async (
   app: Eid,
   person: Eid | null = null,
 ): Promise<Resolved[]> => {
-  let out = await links(c.graph.read, 'from', app)
+  let links = await connectedUses(c.graph.read, app, person)
+  let all = await Promise.all(links.map(async ({ connection, link }) => ({
+    connection,
+    link,
+    sentinels: await sentinelsOf(c, connection),
+  })))
+  return all.filter((r) => Object.keys(r.sentinels).length)
+}
+
+let connectedUses = async (read: Read, app: Eid, person: Eid | null) => {
+  let out = await links(read, 'from', app)
   if (!out.length) return []
-  let found = await c.graph.read(
+  let found = await read(
     line`.entity.eid=${
       out.map((l) => far(l, 'from'))
     }&.${CONNECTION}.status=${'connected' satisfies Status}${sub(ALL)}`,
   )
-  let all = await Promise.all(found.map(async (connection) => ({
+  return found.map((connection) => ({
     connection,
     link: out.find((l) => far(l, 'from') == connection.entity.eid)!,
-    sentinels: await sentinelsOf(c, connection),
-  })))
-  return all.filter((r) =>
-    Object.keys(r.sentinels).length &&
-    (!comp(r.link, USES).each ||
-      comp(r.connection, CONNECTION).owner == person)
+  })).filter((r) =>
+    !comp(r.link, USES).each ||
+    comp(r.connection, CONNECTION).owner == person
   )
 }
 
@@ -1075,8 +1085,35 @@ export let envOf = (
  * host's uses, by the name it reads it by: the credential itself, whatever the
  * link says, since that code is the host's and the key goes nowhere else.
  * yaks.app's own provider keys are its `platform` app's. */
-export let keysOf = (c: Ctx, app: Eid): Promise<Record<string, string>> =>
-  bound(c, app, null, () => true)
+export let keysOf = async (
+  c: Ctx,
+  app: Eid,
+): Promise<Record<string, string>> => {
+  let uses = (await connectedUses(c.graph.read, app, null)).flatMap((r) => {
+    let binding = comp(r.link, USES).binding
+    return typeof binding == 'string' ? [{ ...r, binding }] : []
+  })
+  let integrations = await knownAll(c.graph.read, [
+    ...new Set(uses.map(({ connection }) => integrated(connection))),
+  ])
+  let entries = await Promise.all(uses.map(async ({ connection, binding }) => {
+    let i = knownIn(integrations, integrated(connection))
+    if (!i || !keyed(i)) {
+      // A sign-in can refresh its grant. Only connections still holding one
+      // in the vault can be used, as at the egress.
+      if (!await sentinelOf(c.vault, nameOf(connection))) return []
+      let value = await granted(c, connection)
+      return value ? [[binding, value] as const] : []
+    }
+    let fields = fieldsOf(i)
+    let named = namesOf(binding, fields.map((f) => f.name))
+    let values = await keyFields(c, connection, fields)
+    return Object.entries(named).flatMap(([field, name]) =>
+      values?.[field] ? [[name, values[field]] as const] : []
+    )
+  }))
+  return Object.fromEntries(entries.flat())
+}
 
 // Each connected connection `app` uses, by the name it reads it by: the
 // credential where `direct` says so, else its sentinel.
@@ -1890,14 +1927,20 @@ export let botFrom = async (
 
 let keyOf = async (c: Ctx, b: Bundle, i: Integration, field?: string) => {
   let fields = fieldsOf(i)
-  let raw = await reveal(c.vault, nameOf(b), { env: () => undefined })
-  if (fields.length == 1) {
-    return field == null || field == fields[0].name ? raw : undefined
-  }
-  if (field == null) {
+  if (fields.length > 1 && field == null) {
     throw new Error(`${i.name} is kept as several fields; read one by name`)
   }
-  return raw ? (await fieldsKept(c, b, fields, raw))[field] : undefined
+  let name = field ?? fields[0].name
+  if (!fields.some((f) => f.name == name)) return undefined
+  return (await keyFields(c, b, fields))?.[name]
+}
+
+let keyFields = async (c: Ctx, b: Bundle, fields: Field[]) => {
+  let raw = await reveal(c.vault, nameOf(b), { env: () => undefined })
+  if (!raw) return undefined
+  return fields.length == 1
+    ? { [fields[0].name]: raw }
+    : fieldsKept(c, b, fields, raw)
 }
 
 export let credential = async (
@@ -1906,10 +1949,14 @@ export let credential = async (
   field?: string,
 ): Promise<string | undefined> => {
   let b = await held(c.graph.read, connection)
-  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
+  let i = await known(c.graph.read, integrated(b))
   if (i && keyed(i)) return keyOf(c, b, i, field)
-  let raw = await reveal(c.vault, nameOf(b), { env: () => undefined })
   if (field != null && field != fieldsOf()[0].name) return undefined
+  return granted(c, b)
+}
+
+let granted = async (c: Ctx, b: Bundle): Promise<string | undefined> => {
+  let raw = await reveal(c.vault, nameOf(b), { env: () => undefined })
   if (comp(b, CONNECTION).broker) {
     return marking(c, b, () => brokered(c, b))
   }

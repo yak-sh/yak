@@ -83,6 +83,7 @@ import {
   kind,
   kinds,
   known,
+  knownAll,
   knownIn,
   lacking,
   lend,
@@ -193,11 +194,12 @@ export let logosOf = async (
     : []
   let nameOf = (n: string) =>
     EID.test(n) ? integrationOf(held.find((b) => b.entity.eid == n)) : n
+  let integrations = await knownAll(read, [...new Set(named.map(nameOf))])
   return Object.fromEntries(
-    await Promise.all(named.map(async (n) => {
-      let i = await known(read, nameOf(n))
-      return [n, (i && integrationLogo(i, env)) ?? null] as const
-    })),
+    named.map((n) => {
+      let i = knownIn(integrations, nameOf(n))
+      return [n, (i && integrationLogo(i, env)) ?? null]
+    }),
   )
 }
 
