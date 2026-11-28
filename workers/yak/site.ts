@@ -409,7 +409,8 @@ export let worn = async (req: Request, page: Response, env: Host) => {
   // A HEAD has no bytes here to name; only a GET's etag means anything.
   headers.delete('etag')
   if (req.method == 'HEAD') return new Response(null, { headers })
-  let body = sheeted(await page.text(), env)
+  let { body, preload } = sheeted(await page.text(), env)
+  if (preload) headers.append('link', preload)
   headers.set('etag', `W/"${await checksum(body)}"`)
   return matches(req.headers.get('if-none-match'), headers.get('etag') ?? '')
     ? new Response(null, { status: 304, headers })

@@ -113,6 +113,10 @@ test("the apex's pages are the home app's, kept and purged with it", () => {
     assert(tags.includes('site'), page.tags)
     assert(tags.some((t) => t.startsWith('app:')), page.tags)
     assertStringIncludes(page.kept, 'public')
+    assertEquals(
+      page.headers.get('link'),
+      '<https://yaks.app/style.css>; rel=preload; as=style',
+    )
     // What passes between the gateway and Site, and the browser's own
     // reports, which the apex's report door does not take.
     for (

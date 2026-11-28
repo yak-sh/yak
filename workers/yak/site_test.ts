@@ -137,7 +137,7 @@ test('every page wears the raster yak', () => {
     let document = parsed(page)
     // The favicon comes with the sheet's links, as the page leaves.
     assert(
-      parseHTML(sheeted(html, {})).document.querySelector(
+      parseHTML(sheeted(html, {}).body).document.querySelector(
         'link[rel="icon"][type="image/png"][sizes="32x32"]',
       )?.getAttribute('href')?.match(/\/favicon-32\.png$/),
       `${page} has no PNG favicon`,
@@ -298,7 +298,7 @@ test('the style guide demonstrates every shared component', async () => {
 test('the home nav links to its sections and other pages share their nav', () => {
   let want = ['/#how', '/gallery', '/pricing', '/docs', '/login', '/manage']
   for (let page of branded) {
-    let { document } = parseHTML(sheeted(read(page), {}))
+    let { document } = parseHTML(sheeted(read(page), {}).body)
     let nav = [...document.querySelectorAll('.Nav a')]
     assert(nav.length, `${page} has no nav`)
     let home = ['/gallery', '#cost', '/docs', '/login', '/manage']

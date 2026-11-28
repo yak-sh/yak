@@ -126,17 +126,16 @@ let NAMING = /\b(src|href)=(["'])\/?([\w.-]+)\2/g
  * person signed in instead, and every other file of the site it
  * names at its content-made address. A page the home app served wears the
  * reporter already (`links`), and its island draws the pencil for a person
- * who may write it. */
+ * who may write it. The response preloads the sheet before the HTML arrives. */
 export let sheeted = (html: string, env: Host, names = NAMES) => {
   let sheet = html.match(SHEET)?.[1]
   let woven = WOVEN.test(html)
-  // Start the fetch before the app's inline scripts and install metadata.
   let preload = sheet
-    ? `<link rel="preload" as="style" href="${asset(env, sheet, names)}">`
-    : ''
-  return html.replace(
+    ? `<${asset(env, sheet, names)}>; rel=preload; as=style`
+    : undefined
+  let body = html.replace(
     /<head>/i,
-    (head) => head + preload + importMap((name) => asset(env, name, names)),
+    (head) => head + importMap((name) => asset(env, name, names)),
   )
     .replace(/<body([^>]*)>/i, (_, attrs: string) => {
       let classes = attrs.match(/\sclass=(?:"[^"]*"|'[^']*')/)?.[0] ?? ''
@@ -163,6 +162,7 @@ export let sheeted = (html: string, env: Host, names = NAMES) => {
           ? `${attr}=${quote}${asset(env, name, names)}${quote}`
           : whole,
     )
+  return { body, preload }
 }
 
 /** The source behind a content-made address, for one no longer deployed. */

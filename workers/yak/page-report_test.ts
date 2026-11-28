@@ -255,7 +255,7 @@ test('the same throw on another page is the same bug', async () => {
 test('the home page files a throw and a frame that will not load, tagged with it', async () => {
   let home = page('index.html')
   let { document, window, first, sent } = loaded(
-    sheeted(home, {}),
+    sheeted(home, {}).body,
     'https://yaks.app/',
     404,
   )

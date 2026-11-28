@@ -1095,7 +1095,7 @@ export let walks = async (env: Env, dir: Directory, slugs: string[]) => {
 // not answer, and a page with neither is served as its file.
 export let made = async (env: Env, dir: Directory, file: Response) => {
   let failed = false
-  let served = sheeted(hosted(await file.text(), env), env)
+  let { body: served, preload } = sheeted(hosted(await file.text(), env), env)
   let walked = await walks(env, dir, walking(served)).catch((e) => {
     failed = true
     caught(e, { request: 'home walkthrough' })
@@ -1119,6 +1119,7 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
   headers.delete('content-length')
   headers.delete('etag')
   headers.delete('cf-cache-status')
+  if (preload) headers.append('link', preload)
   if (failed) headers.set('cache-control', 'private, no-store')
   return new Response(showcase(html, shown), {
     status: file.status,

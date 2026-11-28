@@ -74,14 +74,14 @@ for (let root of ['style.css', 'pages.css']) {
 
 test('sheets: a head names one sheet, on this site, with the font preloaded', () => {
   let env = { APEX: 'yaks.fyi' }
-  let head = sheeted(
+  let { body: head, preload } = sheeted(
     '<head><script>app()</script><link rel="stylesheet" href="style.css" /></head>',
     env,
     names,
   )
   let css = `https://yaks.fyi/${names['style.css']}`
   assertEquals(blocking(head), [css])
-  assert(head.startsWith(`<head><link rel="preload" as="style" href="${css}">`))
+  assertEquals(preload, `<${css}>; rel=preload; as=style`)
   assertStringIncludes(
     head,
     `<link rel="preload" href="https://yaks.fyi/${
@@ -211,7 +211,7 @@ test('sheets: a static page names every file of the site it fetches by its bytes
     '<link rel="stylesheet" href="style.css" />' +
     '<script src=\'idle.js\' defer></script><script src="/cta.js"></script>' +
     '<a href="pricing">Pricing</a><script src="nothing.js"></script>'
-  let served = sheeted(page, {}, names)
+  let { body: served } = sheeted(page, {}, names)
   assertEquals(
     fetched(served).toSorted(),
     [
