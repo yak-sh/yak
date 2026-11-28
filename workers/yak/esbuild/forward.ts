@@ -5,15 +5,14 @@
 // its container stopped under the compile, its connection was lost before an
 // exit was recorded, or the runtime marked its Durable Object reset retryable.
 import { timed } from '../../../packages/esbuild/timing.ts'
-
-/** What the compiler answers when its container stopped under a compile for
- * a reason other than the compile's own memory. */
-export let REPLACED = 503
+import { REPLACED } from '../../../packages/esbuild/container.ts'
+export { REPLACED }
 
 let retryable = (e: unknown) => (e as { retryable?: boolean })?.retryable
 
-/** The Containers SDK returns this response when the proxy connection drops. */
-export let disconnected = async (response: Response): Promise<boolean> =>
+// A Compiler still on the previous deployment answers a lost connection this
+// way. Native containers use REPLACED.
+let disconnected = async (response: Response): Promise<boolean> =>
   response.status == 500 &&
   await response.clone().text() == 'Container suddenly disconnected, try again'
 
