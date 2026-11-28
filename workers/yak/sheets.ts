@@ -13,10 +13,10 @@ import { openingHead } from '@yaks/web/opening'
 import { importMap } from './page-imports.ts'
 
 declare const YAK_NAMED: Record<string, string> | undefined
-declare const YAK_CHUNKS: Record<string, string[]> | undefined
+declare const YAK_IMPORTS: Record<string, string[]> | undefined
 
 let NAMES = typeof YAK_NAMED == 'undefined' ? {} : YAK_NAMED
-let CHUNKS = typeof YAK_CHUNKS == 'undefined' ? {} : YAK_CHUNKS
+let IMPORTS = typeof YAK_IMPORTS == 'undefined' ? {} : YAK_IMPORTS
 
 /** Where a page fetches one of the site's files: its content-made address,
  * which the browser keeps for good, or its source's where none was made. */
@@ -27,22 +27,23 @@ export let asset = (
   base = url(env, '/'),
 ) => base + (names[name] ?? name)
 
-/** The chunks the page scripts `names` import, preloaded: a phone fetches
- * them beside the scripts, instead of learning of each from the one before.
- * Each is at the site's root, where the scripts import it from.
+/** What the page scripts `names` import, preloaded (assets.ts
+ * `scriptImports`): a phone fetches it beside the scripts, instead of
+ * learning of each file from the one before. Each is at the site's root,
+ * where the scripts and the import map name it.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let chunks = { '_a.js': ['_yak/chunk.A.js', '_yak/chunk.B.js'], '_b.js': ['_yak/chunk.B.js'] }
+ * let imports = { '_a.js': ['_yak/chunk.A.js', '_yak/_react.1.js'], '_b.js': ['_yak/_react.1.js'] }
  * assertEquals(
- *   preloads(['_a.js', '_b.js', 'away.js'], chunks),
- *   '<link rel="modulepreload" href="/_yak/chunk.A.js"><link rel="modulepreload" href="/_yak/chunk.B.js">',
+ *   preloads(['_a.js', '_b.js', 'away.js'], imports),
+ *   '<link rel="modulepreload" href="/_yak/chunk.A.js"><link rel="modulepreload" href="/_yak/_react.1.js">',
  * )
  * ```
  */
-export let preloads = (names: Iterable<string>, chunks = CHUNKS): string =>
-  [...new Set([...names].flatMap((name) => chunks[name] ?? []))]
-    .map((chunk) => `<link rel="modulepreload" href="/${chunk}">`).join('')
+export let preloads = (names: Iterable<string>, imports = IMPORTS): string =>
+  [...new Set([...names].flatMap((name) => imports[name] ?? []))]
+    .map((at) => `<link rel="modulepreload" href="/${at}">`).join('')
 
 /** Start the chat's modules before the parser reaches its transcript. */
 export let chatPreloads = (env: Host): string =>

@@ -10,7 +10,7 @@ import { rollup } from 'rollup'
 import { dirname, join, resolve } from 'node:path'
 import { builtinModules } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { planned, scriptChunks } from './assets.ts'
+import { planned, scriptImports } from './assets.ts'
 
 /** The entry's static imports, leaving every dynamic door unopened. */
 export let closure = (meta: Metafile, entry: string): Set<string> => {
@@ -90,12 +90,12 @@ let native = (name: string) =>
   name.startsWith('node:') || name.startsWith('cloudflare:')
 
 /** How esbuild reads the kernel's source: `named` is the byte name of each
- * asset its modules point at (assets.ts `planned`), and `chunks` each split
- * page script's chunks (assets.ts `scriptChunks`). */
+ * asset its modules point at (assets.ts `planned`), and `imports` what each
+ * page script imports beside itself (assets.ts `scriptImports`). */
 export let options = (
   root: string,
   named: Record<string, string> = {},
-  chunks: Record<string, string[]> = {},
+  imports: Record<string, string[]> = {},
 ): BuildOptions => ({
   absWorkingDir: root,
   entryPoints: ['index.ts'],
@@ -124,7 +124,7 @@ export let options = (
   define: {
     'process.env.NODE_ENV': '"production"',
     YAK_NAMED: JSON.stringify(named),
-    YAK_CHUNKS: JSON.stringify(chunks),
+    YAK_IMPORTS: JSON.stringify(imports),
   },
 })
 
@@ -162,7 +162,7 @@ export let bundle = async (root: string, output: string, meta: string) => {
     let publicDir = join(root, 'public')
     let names = planned(publicDir).names
     let built = await build({
-      ...options(root, names, scriptChunks(publicDir)),
+      ...options(root, names, scriptImports(publicDir, names)),
       outdir: scratch,
     })
     let source = built.metafile!

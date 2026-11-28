@@ -18,7 +18,7 @@
 // again in halves (@yaks/ui `halved`); what a sheet points at (the pencil,
 // the paper, the fonts); and the scripts and icons the pages name. Each
 // keeps answering at its own address too, as pages already shipped name it.
-import { type Asset, chunksOf, plan, reading, write } from '@yaks/web/assets'
+import { type Asset, plan, reading, write } from '@yaks/web/assets'
 import { CHUNK } from '@yaks/cli/page'
 import { parse } from 'es-module-lexer/js'
 import { halved } from '@yaks/ui'
@@ -38,11 +38,15 @@ let of = (specifier: string) => new URL(import.meta.resolve(specifier))
 
 // What the page scripts leave to the page to load once (./page-imports.ts).
 let external = Object.keys(SHARED)
-// The platform's page scripts, made together so what they share is one chunk
-// a page runs once (@yaks/web/assets `split`): React DOM, the views' parts and
-// the graph's words load once however many of them a page has. Made apart,
-// each script carried its own React DOM, and a page loaded it once a script.
-let paged = { external, split: 'pages' }
+let paged = { external }
+// The scripts an Operator page loads together (the chat, its views, Updates
+// and its actions, Matches), made together so what they share is one chunk
+// the page runs once (@yaks/web/assets `split`): the views' parts and the
+// graph's words load once.
+let operator = { external, split: 'operator' }
+// React and React DOM as the page's import map names them, made together so
+// each module of React is one the page runs once.
+let react = { split: 'react', named: true }
 
 /** The files of the site but those it draws (`drawn`). */
 export let ASSETS: Asset[] = [
@@ -60,12 +64,21 @@ export let ASSETS: Asset[] = [
   { name: '_dates.js', bundle: here('./dates-browser.ts'), named: true },
   // Edit mode on an app's page, loaded by its pencil (public/edit.js).
   { name: '_edit.js', bundle: of('@yaks/platform/edit-mode') },
+  // React, and React DOM, for every platform page (./page-imports.ts).
+  { name: '_react.js', bundle: here('./react/react.ts'), ...react },
+  { name: '_react-jsx.js', bundle: here('./react/jsx-runtime.ts'), ...react },
+  { name: '_react-dom.js', bundle: here('./react/react-dom.ts'), ...react },
+  {
+    name: '_react-dom-client.js',
+    bundle: here('./react/react-dom-client.ts'),
+    ...react,
+  },
   // The Operator chat's conversation (operator-rows.ts), for its page alone.
   { name: '_page-client.js', bundle: of('@yaks/client'), named: true },
   {
     name: '_talk.js',
     bundle: here('./operator-rows.ts'),
-    ...paged,
+    ...operator,
     named: true,
   },
   {
@@ -94,7 +107,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_inbox-actions.js',
     bundle: of('@yaks/platform/updates-browser'),
-    ...paged,
+    ...operator,
     named: true,
   },
   // The Friends page kept current (@yaks/platform/friends-browser).
@@ -166,7 +179,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_matches.js',
     bundle: of('@yaks/platform/operator-matches-browser'),
-    ...paged,
+    ...operator,
     named: true,
   },
   // A space's People page kept current (@yaks/platform/people-browser).
@@ -204,21 +217,21 @@ export let ASSETS: Asset[] = [
   {
     name: '_updates.js',
     bundle: of('@yaks/platform/updates-list-browser'),
-    ...paged,
+    ...operator,
     named: true,
   },
   // A space's Dashboard kept current (@yaks/platform/dashboard-browser).
   {
     name: '_dashboard.js',
     bundle: of('@yaks/platform/dashboard-browser'),
-    ...paged,
+    ...operator,
     named: true,
   },
   // An Operator page's views shown in place (@yaks/platform/talk-views).
   {
     name: '_talk-views.js',
     bundle: of('@yaks/platform/talk-views-browser'),
-    ...paged,
+    ...operator,
     named: true,
   },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
@@ -277,24 +290,36 @@ export let ASSETS: Asset[] = [
  * them in `dir`. */
 export let planned = (dir: string) => plan(ASSETS, reading(dir), halved)
 
-/** Each split script's static chunks, and theirs, by path from the site's
- * root: what a page naming the script preloads beside it (sheets.ts
- * `preloads`), so a phone fetches them at once instead of one import after
- * another. */
-export let scriptChunks = (dir: string): Record<string, string[]> =>
-  Object.fromEntries(
-    ASSETS.filter((asset) => asset.split).map((asset) => [
-      asset.name,
-      chunksOf(
-        [asset],
-        reading(dir),
-        (code) =>
-          parse(code)[0].flatMap(({ d, n }) =>
-            d < 0 && n?.startsWith('/' + CHUNK + '.') ? [n.slice(1)] : []
-          ),
-      ),
-    ]),
+/** What each page script imports beside itself, by path from the site's
+ * root: its chunks, the shared modules it leaves to the page's import map
+ * (./page-imports.ts) at the names their bytes give them (`names`), and what
+ * those import in turn. A page naming the script preloads them (sheets.ts
+ * `preloads`), so a phone fetches them at once, not each after the one that
+ * imports it. */
+export let scriptImports = (
+  dir: string,
+  names: Record<string, string>,
+): Record<string, string[]> => {
+  let read = reading(dir)
+  let imported = (name: string) =>
+    parse(new TextDecoder().decode(read(name)))[0]
+      .flatMap(({ d, n }) => d < 0 && n ? [n] : [])
+  let walk = (name: string, found: Set<string>) => {
+    for (let specifier of imported(name)) {
+      let asset = SHARED[specifier]
+      let at = asset ? names[asset] ?? asset : specifier.slice(1)
+      if (!asset && !specifier.startsWith('/' + CHUNK + '.')) continue
+      if (found.has(at)) continue
+      found.add(at)
+      walk(asset ?? at, found)
+    }
+    return found
+  }
+  return Object.fromEntries(
+    ASSETS.filter((asset) => asset.bundle && (asset.split || asset.external))
+      .map((asset) => [asset.name, [...walk(asset.name, new Set())]]),
   )
+}
 
 /** What the build draws: the Operator store's words as its chat page's
  * graph holds them, the site's pages, the kit's sheet, and the puppeteer a
