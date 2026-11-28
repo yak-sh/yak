@@ -948,16 +948,19 @@ export let unknownProps = (
     : []
   let named = props.flatMap((p) => {
     let paths = companions.filter((c) => v.prop(c, p)).map((c) => `${c}.${p}`)
-    if (paths.length) return [`${p} is ${paths.join(' or ')}`]
-    if (!tail) return []
-    let elsewhere = v.all.flatMap((c) => {
+    return paths.length ? [`${p} is ${paths.join(' or ')}`] : []
+  })
+  // A property of an unrelated component may match the name even when the
+  // component's description gives a better query, as with alias.name.
+  let elsewhere = !tail || named.length ? [] : props.flatMap((p) => {
+    let paths = v.all.flatMap((c) => {
       let prop = v.prop(c, p)
       if (c == comp || !prop) return []
       let about = gist(prop.description)
       return [`.${c}.${p}${about ? ` (${about})` : ''}`]
     })
-    return elsewhere.length
-      ? [`Components declaring ${p} include ${elsewhere.join(' or ')}`]
+    return paths.length
+      ? [`Components declaring ${p} include ${paths.join(' or ')}`]
       : []
   })
   // An operator word put after a component (`.task.in=a,b`).
@@ -984,7 +987,9 @@ export let unknownProps = (
       ? `a component is no property of another, so an entity wearing both ` +
         `is ${worn.join(' or ')}; `
       : ''
-  }${shapeOf(v, comp)}${about ? `; ${comp}: ${about}` : ''}`
+  }${shapeOf(v, comp)}${about ? `; ${comp}: ${about}` : ''}${
+    elsewhere.map((hint) => `; ${hint}`).join('')
+  }`
 }
 
 /**

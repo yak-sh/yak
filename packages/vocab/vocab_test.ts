@@ -1309,7 +1309,8 @@ test('an unknown property is refused with what its component holds', () => {
       'alias: a stable name for an entity',
   )
   assertThrows(() => w.aim('alias.title'), Unknown, 'title is book.title')
-  assertThrows(() => w.aim('alias.voice'), Unknown, '.speech.voice')
+  let voice = assertThrows(() => w.aim('alias.voice'), Unknown, '.speech.voice')
+  assertStringIncludes(voice.message, 'alias: a stable name for an entity')
   assertThrows(() => w.aim('alias.loan.title'), Unknown, '.alias&.loan.title')
   assertEquals(w.aim('loan.of.book.title'), [
     { comp: 'loan', prop: 'of' },
