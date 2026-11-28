@@ -168,12 +168,13 @@ let threadsOf = async (
   person: string,
   space: string,
   all = false,
+  target?: string,
 ) =>
   (await readInbox(
     store.g,
     store.vocab,
     person,
-    { within: WITHIN, all },
+    { within: WITHIN, all, target },
     space,
   ))
     .filter((t) =>
@@ -473,8 +474,7 @@ let theirs = async (
   space: string,
   eid: string,
 ) => {
-  let found = (await threadsOf(store, person, space, true))
-    .find((t) => t.eid == eid)
+  let [found] = await threadsOf(store, person, space, true, eid)
   if (!found) throw refuse('missing', 'That is not in your Updates.')
   return found
 }

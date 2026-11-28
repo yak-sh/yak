@@ -402,12 +402,13 @@ let conversation = async (
  * Text/direction searches read complete words on the server, then apply the
  * same pure policy; callers receive threads rather than the source history.
  * `scope` is the project the person stands in, when they read as one of its
- * people: what is addressed to it reaches them too. */
+ * people: what is addressed to it reaches them too. `target` asks about one
+ * candidate through the same visibility and attention policy as the list. */
 export let readInbox = async (
   tx: ReadTx,
   vocab: Vocabulary,
   actor: string,
-  search: Search = {},
+  search: Search & { target?: string } = {},
   scope?: string,
 ): Promise<Thread[]> => {
   let txGet = tx.get.bind(tx), txRead = tx.read.bind(tx)
@@ -423,7 +424,12 @@ export let readInbox = async (
     search.text?.trim() || search.direction ? 'search' : 'metadata',
     vocab,
   )
-  let first = await read([candidates(who, has, search.within)])
+  let possible = candidates(who, has, search.within)
+  let first = await read([
+    search.target && possible
+      ? line`${sub(possible)}&.entity.eid=${search.target}`
+      : possible,
+  ])
   let all = await conversation(first, who, has, read, search)
   let byId = index(all)
   let roots = [...new Set(all.map((r) => threadOf(r, who, byId)))]
@@ -432,7 +438,8 @@ export let readInbox = async (
     whole(roots, (part) => requirements(part, has)),
   )
   let tasks = await read(whole(edges, (part) => dependents(part, has)))
-  return threads(unique([...all, ...edges, ...tasks]), who, search)
+  let found = threads(unique([...all, ...edges, ...tasks]), who, search)
+  return search.target ? found.filter((t) => t.eid == search.target) : found
 }
 
 /** Full authoritative words and messages for one thread, including archived
