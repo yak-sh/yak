@@ -169,3 +169,36 @@ test('notes kept only as an Update are moved into a doc it points to, once', asy
   equal(await pass(), false)
   equal(await store.g.read('.doc&.output&*'), before)
 })
+
+test('recovered notes sourced from a call line open at that call', async () => {
+  let { store, operator, space, person } = await fixture()
+  await operator.note({ person }, space, '', {
+    call: 'earlier',
+    began: true,
+  })
+  await operator.note({ person }, space, '', {
+    call: 'c1',
+    began: true,
+    via: 'discord',
+  })
+  let [began] = await store.g.read(
+    '.operator_call.call=c1&.operator_call.began=true',
+  )
+  await store.g.apply([{
+    entity: { eid: crypto.randomUUID() },
+    doc: { title: 'Notes of the Discord call', body: NOTES },
+    output: { source: began.entity.eid },
+  }], { trusted: true })
+  let { html } = await conversationOf(store, '/at', rootOf(space.eid, person))
+  let { document } = parseHTML(`<div>${html}</div>`)
+  let summaries = [...document.querySelectorAll('details')].filter((d) =>
+    d.querySelector('summary')?.textContent?.includes(' · Notes')
+  )
+  equal(
+    summaries.map((d) => [
+      d.querySelector('summary')?.textContent?.trim(),
+      d.textContent?.includes('The barn opens Friday.'),
+    ]),
+    [['Discord call, under a minute · Notes', true]],
+  )
+})

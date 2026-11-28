@@ -2,7 +2,8 @@
 // summary, report or transcript it makes off the chat, is a doc of its own
 // in the space's store: `doc{title, body}`, wearing `output{source}` for the
 // request it answers, which names its source (a call's notes request names
-// the line where the call began, `operator_request.about`). Search finds it
+// the line where the call began, `operator_request.about`). Notes recovered
+// from an Update without a request can name that line directly. Search finds it
 // like any doc, and the person's Update only points to it
 // (`notification{about}`), so dismissing the Update loses nothing.
 //
@@ -146,8 +147,8 @@ export type Called = {
 }
 
 /** The calls that began among `entries`, by the entry each began at, read
- * from the graph: every line kept of each call, the notes requests about
- * where it began, and the docs made from those. `title` names a line a
+ * from the graph: every line kept of each call and the docs sourced from
+ * where it began or from notes requests about it. `title` names a line a
  * call came on (`operator_call.via`). */
 export let callsOf = async (
   g: Pick<Graph, 'read'>,
@@ -166,21 +167,19 @@ export let callsOf = async (
       line`.operator_request.channel=notes&.operator_request.about=${ids}&.order=created.at&.fields=entity.eid,operator_request.about`,
     ),
   ])
-  let docs = asked.length
-    ? await g.read(
-      line`.output.source=${
-        asked.map((r) => r.entity.eid)
-      }&.doc&.fields=doc.title,doc.body,output.source`,
-    )
-    : []
+  let sources = [...ids, ...asked.map((r) => r.entity.eid)]
+  let docs = await g.read(
+    line`.output.source=${sources}&.doc&.fields=doc.title,doc.body,output.source`,
+  )
   let at = (b: Bundle) => Date.parse(String(comp(b, 'created')?.at ?? ''))
   return Object.fromEntries(began.map((b, i) => {
     let times = lines.filter((l) => comp(l, 'operator_call')?.call == calls[i])
       .map(at).filter(Number.isFinite)
-    let about = new Set(
-      asked.filter((r) => comp(r, 'operator_request')?.about == ids[i])
+    let about = new Set([
+      ids[i],
+      ...asked.filter((r) => comp(r, 'operator_request')?.about == ids[i])
         .map((r) => r.entity.eid),
-    )
+    ])
     let via = comp(b, 'operator_call')?.via
     return [ids[i], {
       ...via ? { via: title(String(via)) } : {},
