@@ -807,12 +807,12 @@ let MAX_AUDIO = 25 * 1024 * 1024
  */
 export let speechDoor: Answer = async (asked) => {
   let { req, path, space, app, json } = asked
-  let env = await keyed(asked.env)
   let route = DOORS.get(path)
   if (!route) return null
   if (req.method != route.method) return json(405, 'method_not_allowed')
   let denied = await modelAccess(asked)
   if (denied) return denied
+  let env = await keyed(asked.env)
   // Asked with a space's own key: what its provider refuses is its account's
   // to answer, said back rather than reported here.
   let own = false

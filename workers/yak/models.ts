@@ -506,6 +506,8 @@ export let modelRun: Answer = async (
         'asked as its provider takes it',
     )
   }
+  let { keyed } = await import('./platform-keys.ts')
+  env = await keyed(env)
   let conversation = req.headers.get('x-session-affinity') || asked.session_id
   let graph = metaOf(appStore(env.STORE, space, app, env), KERNEL)
   try {
