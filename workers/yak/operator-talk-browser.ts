@@ -18,6 +18,7 @@ import {
   isOpen,
   Loading,
   TAKE,
+  UNFETCHED,
 } from '@yaks/ux/conversation'
 import { Button, Notice } from '@yaks/ui/parts'
 import { opening, unsaid } from '@yaks/session/conversation'
@@ -203,7 +204,8 @@ export let mountTalk = (
   // A lazy fold opened in a line held as the server drew it, which holds
   // only `Loading…`: the line's entries fetched, and the line drawn from them
   // as the server drew it, so the fold keeps its place and whether it is open.
-  // One that could not be fetched says so, with a retry.
+  // One whose fetch failed says so, with a retry, and one nothing can fetch
+  // says so too.
   let fetching = new Set<string>()
   let folds = new Set<HTMLElement>()
   let closeFold = (body: HTMLElement) => {
@@ -217,10 +219,27 @@ export let mountTalk = (
     let line = fold &&
       held?.lines.find((l) => box.querySelector(`#row-${l.id}`)?.contains(fold))
     let id = line?.id
-    if (!fold || !id || !line || line.uses || !unfold || fetching.has(id)) {
+    // A line drawn from what the page holds draws its folds as they open.
+    if (!fold || line?.uses || (id && fetching.has(id))) return
+    let body = fold.lastElementChild as HTMLElement
+    if (!id || !line || !unfold) {
+      // One holding only Loading that nothing can fetch would wait forever,
+      // so it says so.
+      if (!body?.querySelector(`[${UNFETCHED}]`)) return
+      onError(
+        new Error(
+          `An opened fold of the conversation held only Loading and could not be fetched: ${
+            line ? 'this page fetches no folds' : 'no line on the page holds it'
+          }`,
+        ),
+      )
+      folds.add(body)
+      render(
+        h(Notice, { mod: 'negative' }, 'This could not be opened.'),
+        body,
+      )
       return
     }
-    let body = fold.lastElementChild as HTMLElement
     fetching.add(id)
     folds.add(body)
     render(h(Loading, null), body)

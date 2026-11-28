@@ -60,9 +60,12 @@ let pressed = ({ e, onChange }: Disclosed) =>
     }
     : undefined
 
+/** The mark on what a lazy disclosure holds until it is opened and drawn. */
+export let UNFETCHED = 'data-unfetched'
+
 /** What a lazy disclosure holds until it is opened and drawn. */
 export let Loading = (): JSX.Element =>
-  h(State, { mod: ['pulse', 'active'] }, 'Loading…')
+  h(State, { mod: ['pulse', 'active'], [UNFETCHED]: '' }, 'Loading…')
 
 /** Open as its state says; what it holds is drawn whether open or not, so a
  * page drawn on a server opens it with no script, unless it is `lazy`. */

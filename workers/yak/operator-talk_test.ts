@@ -232,20 +232,28 @@ let told = entry('told', 1, {
   ask: {},
   sending: { instructions: '# Base\nBe kind.' },
 })
-let telling = (fails = 0, tab: 'new' | 'same' = 'new') => {
+let telling = (fails = 0, tab: 'new' | 'same' = 'new', fetches = true) => {
   let all = [told, entry('said', 2, { content: { body: 'Hello' } })]
   let asked: string[] = []
   let answers: (() => void)[] = []
-  let p = page(all, [], undefined, (line) => {
-    asked.push(line)
-    let { lines } = frame('task-1', all, names, 0).operator
-    let one = { ...lines, lines: lines.lines.filter((l) => l.id == line) }
-    return new Promise((done, fail) =>
-      answers.push(() =>
-        asked.length <= fails ? fail(new Error('offline')) : done(one)
-      )
-    )
-  }, tab)
+  let p = page(
+    all,
+    [],
+    undefined,
+    fetches
+      ? (line) => {
+        asked.push(line)
+        let { lines } = frame('task-1', all, names, 0).operator
+        let one = { ...lines, lines: lines.lines.filter((l) => l.id == line) }
+        return new Promise((done, fail) =>
+          answers.push(() =>
+            asked.length <= fails ? fail(new Error('offline')) : done(one)
+          )
+        )
+      }
+      : undefined,
+    tab,
+  )
   let fold = () => p.box.querySelector('#row-told [data-lazy]')!
   let press = (at: Element) =>
     at.dispatchEvent(new p.Event('click', { bubbles: true, cancelable: true }))
@@ -302,6 +310,17 @@ test('a conversation visited again in the same tab is drawn as the server drew i
   again.press()
   await again.answer()
   equal(again.shown(), { open: true, says: 'Base' })
+})
+
+test('a fold nothing can fetch says it could not be opened, and the tracker hears', async () => {
+  let t = telling(0, 'new', false)
+  using _p = t.p
+  t.press()
+  await t.answer()
+  equal(t.shown(), { open: true, says: 'This could not be opened.' })
+  equal(t.p.errors, [
+    'An opened fold of the conversation held only Loading and could not be fetched: this page fetches no folds',
+  ])
 })
 
 test('a fold whose line could not be fetched says so, and its retry opens it', async () => {

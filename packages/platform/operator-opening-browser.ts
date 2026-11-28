@@ -1,5 +1,8 @@
-/** Load the main Operator view over its opening frame after the frame draws. */
-import { arrived, LEAVE, leaving, PAGE, sources, swap } from '@yaks/ui/navigate'
+/** Load the main Operator view over its opening frame after the frame draws.
+ * Each step it reaches is marked on the slot (`data-operator-stage`), which
+ * the slot's watch reports should the conversation never come
+ * (./operator-opening-watch.ts). */
+import { LEAVE, leaving, PAGE, sources, swap } from '@yaks/ui/navigate'
 import { keptChat } from './operator-copy-browser.ts'
 import { VIEW, VIEWED } from './talk-views.ts'
 
@@ -30,8 +33,14 @@ let delivered = async (doc: Document, signal: AbortSignal) => {
   return JSON.parse(text ?? 'null') as string | null
 }
 
-let open = (slot: HTMLElement) => {
+let STAGE = 'data-operator-stage'
+// What the slot says while it waits, or that it failed (./operator-opening-watch.ts).
+let FAILED = 'data-operator-failed'
+let SAID = '[data-operator-loading], [data-operator-failed]'
+
+let open = (slot: HTMLElement): AbortSignal | undefined => {
   let doc = slot.ownerDocument
+  let stage = (at: string) => slot.setAttribute(STAGE, at)
   let view = slot.closest<HTMLElement>(`[${VIEW}]`)
   let frame = view?.closest('[data-site-frame]')
   let signal = leaving(doc)
@@ -39,11 +48,14 @@ let open = (slot: HTMLElement) => {
     slot.isConnected && !signal.aborted && !view?.hidden &&
     !frame?.hasAttribute('inert')
   let { operatorOpening: path, person, space } = slot.dataset
-  if (!path || !person || !space) return
+  if (!path || !person || !space) return stage('unnamed'), undefined
+  stage('bound')
   let url = new URL(path, location.href)
   let answer: Document | undefined, reading = false
   let show = () => {
-    if (!answer || !visible()) return
+    if (!answer) return
+    if (!visible()) return stage('answered, out of sight')
+    stage('drawing')
     let ran = sources(doc)
     let began = performance.now()
     doc.dispatchEvent(new CustomEvent(LEAVE))
@@ -68,11 +80,12 @@ let open = (slot: HTMLElement) => {
     if (answer) return show()
     reading = true
     try {
-      let text = slot.hasAttribute('data-operator-stream')
-        ? await delivered(doc, signal)
-        : undefined
+      let streamed = slot.hasAttribute('data-operator-stream')
+      if (streamed) stage('awaiting the streamed answer')
+      let text = streamed ? await delivered(doc, signal) : undefined
       if (text == null) {
         if (!visible()) return
+        stage('fetching')
         let res = await fetch(url, {
           signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
         })
@@ -81,6 +94,7 @@ let open = (slot: HTMLElement) => {
         }
         text = await res.text()
       }
+      stage('parsing')
       let page = new DOMParser().parseFromString(text, 'text/html')
       if (!page.querySelector('script[data-operator-chat]')) {
         throw new Error(
@@ -91,14 +105,18 @@ let open = (slot: HTMLElement) => {
       show()
     } catch (error) {
       if (signal.aborted) return
+      stage('failed')
       globalThis.reportError?.(error)
       let retry = doc.createElement('button')
       retry.textContent = 'Try again'
       retry.onclick = () => void load()
       let status = doc.createElement('div')
       status.setAttribute('role', 'status')
+      status.setAttribute(FAILED, '')
       status.append('The conversation could not be loaded. ', retry)
-      slot.querySelector('[role=status]')?.replaceWith(status)
+      let said = slot.querySelector(SAID)
+      if (said) said.replaceWith(status)
+      else slot.append(status)
     } finally {
       reading = false
     }
@@ -110,15 +128,36 @@ let open = (slot: HTMLElement) => {
     if (!html || signal.aborted) return
     let kept = doc.createElement('div')
     kept.inert = true
+    kept.setAttribute('data-operator-kept', '')
     kept.innerHTML = html
+    slot.querySelector(':scope > [data-operator-kept]')?.remove()
     slot.prepend(kept)
     slot.querySelector('[data-operator-loading]')?.setAttribute('hidden', '')
     let pane = doc.getElementById('content')
     if (pane && visible()) pane.scrollTop = pane.scrollHeight
   }).catch((e) => globalThis.reportError?.(e))
   activated()
+  return signal
 }
 
-if (typeof document != 'undefined') {
-  arrived<HTMLElement>('[data-operator-opening]', open)
+/** Open every slot in `doc` now and on every page a swap brings. A slot a
+ * swap kept in place, whose listeners its page's leaving took away, is
+ * opened again. */
+export let opening = (
+  doc: Document,
+  each: (slot: HTMLElement) => AbortSignal | undefined = open,
+): void => {
+  let held = new WeakMap<Element, AbortSignal | undefined>()
+  let bind = () => {
+    for (
+      let slot of doc.querySelectorAll<HTMLElement>('[data-operator-opening]')
+    ) {
+      if (held.has(slot) && !held.get(slot)?.aborted) continue
+      held.set(slot, each(slot))
+    }
+  }
+  bind()
+  doc.addEventListener(PAGE, bind)
 }
+
+if (typeof document != 'undefined') opening(document)

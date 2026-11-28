@@ -43,6 +43,8 @@ import { frame, FRAMED } from './frame.ts'
 import { apex, spaceHost, url } from '@yaks/platform/host'
 import { earlyDraftScript } from '@yaks/platform/operator-early-draft'
 import { BROWSER_ZONE } from '@yaks/platform/local-time'
+import { openingWatchScript } from '@yaks/platform/operator-opening-watch'
+import { PATH as REPORT } from './page-report.ts'
 import {
   backTo,
   chatPath,
@@ -1837,11 +1839,11 @@ let openingParts = (
     here,
     chat,
     main: [
-      column(
-        '',
+      column('', [
         h(
           'div',
           {
+            key: 'slot',
             'data-operator-opening': full,
             'data-operator-stream': streaming ? '' : undefined,
             'data-person': who.person,
@@ -1854,7 +1856,12 @@ let openingParts = (
           ),
           h('noscript', null, h('a', { href: full }, 'Open conversation')),
         ),
-      ),
+        // Says so where the conversation never comes (operator-opening-watch.ts).
+        h('script', {
+          key: 'watch',
+          dangerouslySetInnerHTML: { __html: openingWatchScript(REPORT) },
+        }),
+      ]),
       askBox(space, who, open, askingAt(env, space, here, app), ''),
     ],
     skip: ['#ask', 'Skip to the message box'],
