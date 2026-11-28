@@ -116,13 +116,20 @@ let form = (
 let words = (text: string) =>
   h('div', { className: 'Update_Words' }, markdown(text))
 
+// A title as it reads mid-sentence: "Read notes of your call".
+let lower = (title: string) => title[0].toLowerCase() + title.slice(1)
+
 // The doc an update points to, opened in place.
 let opened = (u: Update) =>
   u.doc
     ? h(
       More,
       { mod: 'quiet', className: 'Update_Doc' },
-      h(More.Summary, {}, `Read ${u.doc.title || 'it'}`),
+      h(
+        More.Summary,
+        {},
+        u.doc.title ? `Read ${lower(u.doc.title)}` : 'Read it',
+      ),
       h(More.Body, {}, words(u.doc.body)),
     )
     : null

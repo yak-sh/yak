@@ -136,7 +136,7 @@ export let CALLED = 'They called you, and your voice on the call answered.'
 /** What the Operator reads where notes of such a call were asked for, which
  * the conversation leaves out. */
 export let NOTED =
-  'Notes of this call were asked for: when it ends, you write them from what was said on it, for their Updates.'
+  'Notes of this call were asked for: when it ends, you write them from what was said on it, kept in the space and pointed to from their Updates.'
 
 /** How words came (@yaks/session `channel`): their channel, and the framing
  * the model reads before them, which the conversation leaves out. */
