@@ -194,4 +194,23 @@ test('whole reads scale with worn components across one or 100 hits', () => {
   queries.length = 0
   assertEquals(s.read(`.${first}`).length, 100)
   assertEquals(queries.length, 0) // the filter's answer and every entity held
+
+  queries.length = 0
+  let subset = ids.slice(1)
+  let projected = get(
+    driver,
+    vocab,
+    subset,
+    {},
+    Array.from({ length: 40 }, (_, i) => name(i)),
+  )
+  assertEquals(
+    projected,
+    subset.map((eid) => ({
+      entity: { eid },
+      [first]: {},
+    })),
+  )
+  // The stored shape is private and still narrows the read.
+  assert(queries.every((sql) => !sql.includes(last)))
 })

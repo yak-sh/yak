@@ -1224,7 +1224,11 @@ export let get = (
     let open: { eid: string; id: number; pointed: readonly string[] | null }[] =
       []
     let spines = initial ?? driver.query(namedSpine(vocab, ids))
-    if (!initial && (!comps || typed)) kinded(driver, spines)
+    // A projection onto one private facet already knows its table. Wider
+    // projections use the stored shapes even when readers cannot see them.
+    if (!initial && (typed || !comps || names.length > 1)) {
+      kinded(driver, spines)
+    }
     for (let row of spines) {
       let eid = String(row.eid)
       let entity = {
