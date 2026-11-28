@@ -26,7 +26,7 @@ import { operatorModel, operatorService, released } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { CONVERSATION } from './operator-host.ts'
-import { asideHtml } from './operator-rows.ts'
+import { asideDrawn } from './operator-rows.ts'
 import { notification } from './operator-updates.ts'
 import { toolEid } from '@yaks/tools/result'
 import { identityEid } from '@yaks/graph'
@@ -1027,8 +1027,9 @@ test('a helper’s page is zoomed in: one line in the bar, the way back out, its
     ),
     'Running',
   )
-  let listed = parseHTML(
-    asideHtml({
+  let listed = asideDrawn(
+    parseHTML('<!doctype html><body></body>').document,
+    {
       turn: null,
       helpers: [{
         session: helper,
@@ -1039,8 +1040,8 @@ test('a helper’s page is zoomed in: one line in the bar, the way back out, its
         runs: 'Your machine',
         model: 'Sonnet 5.5',
       }],
-    }),
-  ).document
+    },
+  )
   let fold = listed.querySelector('[data-helping] [data-fold]')!
   assertEquals(fold.hasAttribute('open'), false)
   assertEquals(

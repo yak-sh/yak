@@ -16,8 +16,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Bundle } from '@yaks/graph'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
@@ -50,11 +49,8 @@ let DRAFT_STATUS = '[data-draft-status]'
 
 let OPENING = 'data-canvas-opening'
 
-let element = (doc: Document, node: ReturnType<typeof appCanvas>) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content.firstElementChild as HTMLElement
-}
+let element = (doc: Document, node: ReturnType<typeof appCanvas>) =>
+  fragment(doc, node).firstElementChild as HTMLElement
 
 /** The rows the canvas is drawn from. */
 export type Held = { apps: Bundle[]; making: Bundle[] }

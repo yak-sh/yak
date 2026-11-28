@@ -12,8 +12,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Client } from '@yaks/client'
 import { copying, shown } from '@yaks/ui/copy-browser'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
@@ -29,12 +28,6 @@ import { type AppsView, appsView } from './space-apps-view.ts'
 
 /** The Apps view. */
 export let VIEW = '[data-view="apps"]'
-
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content
-}
 
 // The rows the page carried for its first paint stay as they are.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
@@ -70,7 +63,7 @@ export let bindApps = (
   let draw = () => {
     if (!watches.apps.ready) return
     let next = root.cloneNode(false) as HTMLElement
-    next.append(made(
+    next.append(fragment(
       root.ownerDocument,
       appsView(view, {
         apps: listedOf(watches.apps.value, space, watches.broken.value),

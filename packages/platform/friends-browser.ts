@@ -9,8 +9,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Client } from '@yaks/client'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
 import { ACCOUNT, accountOf, accountWords } from './account-rows.ts'
@@ -20,12 +19,6 @@ import { pageGraph } from './page-graph.ts'
 
 /** The Friends view. */
 export let VIEW = '[data-view="friends"]'
-
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content
-}
 
 // What a redraw leaves: the rows the page carried for its first paint.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
@@ -39,7 +32,7 @@ export let drawFriends = (
   let account = accountOf(rows)
   if (!account) return
   let next = root.cloneNode(false) as HTMLElement
-  next.append(made(root.ownerDocument, friendsView(view, account)))
+  next.append(fragment(root.ownerDocument, friendsView(view, account)))
   morph(root, next, KEPT)
 }
 

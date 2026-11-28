@@ -11,7 +11,8 @@ import { platform } from './directory-rows-probe.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { rootAt } from './operator-root.ts'
 import { conversationOf } from './operator-host.ts'
-import { helperHtml } from './operator-rows.ts'
+import { helperDrawn } from './operator-rows.ts'
+import { parseHTML } from 'linkedom'
 import { call, type Ctx } from './tools.ts'
 
 let person = crypto.randomUUID()
@@ -210,7 +211,11 @@ let done = listed.find((h) => h.session == nativeChild.entity.eid)!
 test('the chat’s aside lists a helper by its title, how long ago it ended and what it came to', () => {
   assertEquals(done.title, 'Friday schedule check')
   assertEquals(done.recap, 'Helper checked the schedule; Tuesday is free.')
-  let html = helperHtml(done, Date.parse(done.until!) + 2 * 86_400_000)
+  let html = helperDrawn(
+    parseHTML('<!doctype html><body></body>').document,
+    done,
+    Date.parse(done.until!) + 2 * 86_400_000,
+  ).outerHTML
   assertStringIncludes(html, 'aria-label="Done"')
   assertStringIncludes(html, '2 days ago')
   assertStringIncludes(

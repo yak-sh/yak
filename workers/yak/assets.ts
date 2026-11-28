@@ -38,12 +38,11 @@ let of = (specifier: string) => new URL(import.meta.resolve(specifier))
 
 // What the page scripts leave to the page to load once (./page-imports.ts).
 let external = Object.keys(SHARED)
-let paged = { external }
-// The scripts an Operator page loads together (the chat, its views, Updates
-// and its actions, Matches), made together so what they share is one chunk
-// the page runs once (@yaks/web/assets `split`): Preact, the views' parts
-// and the graph's words load once.
-let operator = { external, split: 'operator' }
+// The platform's page scripts, made together so what they share is one chunk
+// a page runs once (@yaks/web/assets `split`): React DOM, the views' parts and
+// the graph's words load once however many of them a page has. Made apart,
+// each script carried its own React DOM, and a page loaded it once a script.
+let paged = { external, split: 'pages' }
 
 /** The files of the site but those it draws (`drawn`). */
 export let ASSETS: Asset[] = [
@@ -66,7 +65,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_talk.js',
     bundle: here('./operator-rows.ts'),
-    ...operator,
+    ...paged,
     named: true,
   },
   {
@@ -77,7 +76,12 @@ export let ASSETS: Asset[] = [
   },
   // Drawn (`drawn`), and named by its bytes here once it is written.
   { name: '_words.js', named: true },
-  { name: '_settings.js', bundle: here('./settings.ts'), named: true },
+  {
+    name: '_settings.js',
+    bundle: here('./settings.ts'),
+    ...paged,
+    named: true,
+  },
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
   // The service worker (./service-worker.ts), at the root it serves, and
   // again at the address browsers that allowed notifications registered.
@@ -90,7 +94,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_inbox-actions.js',
     bundle: of('@yaks/platform/updates-browser'),
-    ...operator,
+    ...paged,
     named: true,
   },
   // The Friends page kept current (@yaks/platform/friends-browser).
@@ -162,7 +166,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_matches.js',
     bundle: of('@yaks/platform/operator-matches-browser'),
-    ...operator,
+    ...paged,
     named: true,
   },
   // A space's People page kept current (@yaks/platform/people-browser).
@@ -200,21 +204,21 @@ export let ASSETS: Asset[] = [
   {
     name: '_updates.js',
     bundle: of('@yaks/platform/updates-list-browser'),
-    ...operator,
+    ...paged,
     named: true,
   },
   // A space's Dashboard kept current (@yaks/platform/dashboard-browser).
   {
     name: '_dashboard.js',
     bundle: of('@yaks/platform/dashboard-browser'),
-    ...operator,
+    ...paged,
     named: true,
   },
   // An Operator page's views shown in place (@yaks/platform/talk-views).
   {
     name: '_talk-views.js',
     bundle: of('@yaks/platform/talk-views-browser'),
-    ...operator,
+    ...paged,
     named: true,
   },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
@@ -273,18 +277,23 @@ export let ASSETS: Asset[] = [
  * them in `dir`. */
 export let planned = (dir: string) => plan(ASSETS, reading(dir), halved)
 
-/** The static chunks for the Operator and the Updates views it holds. */
-export let chatChunks = (dir: string) =>
-  chunksOf(
-    ASSETS.filter(({ name }) =>
-      ['_talk.js', '_talk-views.js', '_updates.js', '_inbox-actions.js']
-        .includes(name)
-    ),
-    reading(dir),
-    (code) =>
-      parse(code)[0].flatMap(({ d, n }) =>
-        d < 0 && n?.startsWith('/' + CHUNK + '.') ? [n.slice(1)] : []
+/** Each split script's static chunks, and theirs, by path from the site's
+ * root: what a page naming the script preloads beside it (sheets.ts
+ * `preloads`), so a phone fetches them at once instead of one import after
+ * another. */
+export let scriptChunks = (dir: string): Record<string, string[]> =>
+  Object.fromEntries(
+    ASSETS.filter((asset) => asset.split).map((asset) => [
+      asset.name,
+      chunksOf(
+        [asset],
+        reading(dir),
+        (code) =>
+          parse(code)[0].flatMap(({ d, n }) =>
+            d < 0 && n?.startsWith('/' + CHUNK + '.') ? [n.slice(1)] : []
+          ),
       ),
+    ]),
   )
 
 /** What the build draws: the Operator store's words as its chat page's

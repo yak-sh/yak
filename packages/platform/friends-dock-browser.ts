@@ -26,8 +26,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
 import { morph, PAGE } from '@yaks/ui/navigate'
@@ -61,12 +60,6 @@ export let VIEW = `#${DOCK}[data-friends-dock]`
 
 /** Where the open panel takes the screen (@yaks/ui/Dock.css). */
 export let PHONE = '(max-width: 700px)'
-
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content
-}
 
 /** The drafts the dock keeps what is typed to each friend in, by the
  * friend's eid. */
@@ -165,10 +158,10 @@ export let bindDock = (root: HTMLElement, o: Docking): () => void => {
     let end = !said ||
       said.scrollTop + said.clientHeight >= said.scrollHeight - 2
     let next = root.cloneNode(false) as HTMLElement
-    next.append(made(doc, dockView(view, list, rows, at, now())))
+    next.append(fragment(doc, dockView(view, list, rows, at, now())))
     morph(root, next)
     for (let bar of doc.querySelectorAll('[data-dock-bar]')) {
-      let fresh = made(doc, barLauncher(list, rows, me)).firstElementChild!
+      let fresh = fragment(doc, barLauncher(list, rows, me)).firstElementChild!
       morph(bar, fresh)
     }
     keep()

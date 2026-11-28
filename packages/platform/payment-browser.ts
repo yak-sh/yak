@@ -13,8 +13,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Bundle } from '@yaks/graph'
 import type { Client, Watch } from '@yaks/client'
 import { mint } from '@yaks/graph'
@@ -36,12 +35,6 @@ import { sideApps, sideWords } from './side-rows.ts'
 
 /** The Selling and Billing views. */
 export let VIEW = '[data-view="payment"]'
-
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content
-}
 
 // The rows the page carried for its first paint stay as they are.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
@@ -65,7 +58,7 @@ export let drawPayment = (
   let rows = paymentOf(view.space.eid, Object.values(held).flat())
   if (!rows) return
   let next = root.cloneNode(false) as HTMLElement
-  next.append(made(root.ownerDocument, paymentView(view, rows)))
+  next.append(fragment(root.ownerDocument, paymentView(view, rows)))
   morph(root, next, KEPT)
 }
 

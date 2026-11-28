@@ -80,7 +80,7 @@ import {
 
 import { versionOf } from './running.ts'
 
-import { asset, links } from './sheets.ts'
+import { asset, links, preloads } from './sheets.ts'
 import { FRAMED } from './frame.ts'
 import { type Preview, tags as previewTags } from './link-preview.ts'
 
@@ -155,6 +155,9 @@ let documented = (
   preview?: Preview,
 ) => {
   let file = (name: string) => asset(env, name, undefined, assets)
+  // The page's module scripts, whose chunks it preloads.
+  let scripts = new Set<string>()
+  let module = (name: string) => (scripts.add(name), file(name))
   let layouts = layout.split(/\s+/).filter(Boolean)
   let framed = layouts.includes(FRAMED)
   let open = `<!doctype html>
@@ -172,8 +175,8 @@ ${importMap(file)}${
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="${PLATFORM_BACKGROUND}" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="${PLATFORM_DARK_BACKGROUND}" media="(prefers-color-scheme: dark)">
-<script type="module" src="${file('_navigate.js')}" data-navigate></script>
-<script type="module" data-frame-script src="${file('_keep.js')}"></script>`
+<script type="module" src="${module('_navigate.js')}" data-navigate></script>
+<script type="module" data-frame-script src="${module('_keep.js')}"></script>`
       : ''
   }
 <title>${preview ? esc(preview.title) : `${title} · yaks.app`}</title>
@@ -197,109 +200,111 @@ ${
     layouts.map((name) => name + '_Main').join(' ')
   }">${main}`
   let close = `</main><script type="module" src="${
-    file('_dates.js')
+    module('_dates.js')
   }"></script>${
     main.includes('data-sort=')
-      ? `<script type="module" src="${file('_sort.js')}"></script>`
+      ? `<script type="module" src="${module('_sort.js')}"></script>`
       : ''
   }${
     main.includes(' data-inbox-actions') ||
       main.includes(' data-side-view=') &&
         !main.includes(' data-operator-chat=')
-      ? `<script type="module" src="${file('_inbox-actions.js')}"></script>`
+      ? `<script type="module" src="${module('_inbox-actions.js')}"></script>`
       : ''
   }${
     main.includes('data-friends-view=')
-      ? `<script type="module" src="${file('_friends.js')}"></script>`
+      ? `<script type="module" src="${module('_friends.js')}"></script>`
       : ''
   }${
     main.includes('data-friends-dock=')
-      ? `<script type="module" src="${file('_dock.js')}"></script>`
+      ? `<script type="module" src="${module('_dock.js')}"></script>`
       : ''
   }${
     main.includes('data-profile-view=')
-      ? `<script type="module" src="${file('_profile.js')}"></script>`
+      ? `<script type="module" src="${module('_profile.js')}"></script>`
       : ''
   }${
     main.includes('data-invite-view=')
-      ? `<script type="module" src="${file('_invite.js')}"></script>`
+      ? `<script type="module" src="${module('_invite.js')}"></script>`
       : ''
   }${
     main.includes('data-shared-view=')
-      ? `<script type="module" src="${file('_shared.js')}"></script>`
+      ? `<script type="module" src="${module('_shared.js')}"></script>`
       : ''
   }${
     main.includes('data-updates-view=')
-      ? `<script type="module" src="${file('_updates.js')}"></script>`
+      ? `<script type="module" src="${module('_updates.js')}"></script>`
       : ''
   }${
     main.includes(' data-talk-view=') || main.includes('data-canvas-slot=') ||
       main.includes('data-canvas-view=')
-      ? `<script type="module" src="${file('_talk-views.js')}"></script>`
+      ? `<script type="module" src="${module('_talk-views.js')}"></script>`
       : ''
   }${
     main.includes('data-apps-view=')
-      ? `<script type="module" src="${file('_apps.js')}"></script>`
+      ? `<script type="module" src="${module('_apps.js')}"></script>`
       : ''
   }${
     main.includes('data-agents-view=')
-      ? `<script type="module" src="${file('_agents.js')}"></script>`
+      ? `<script type="module" src="${module('_agents.js')}"></script>`
       : ''
   }${
     main.includes('data-people-view=')
-      ? `<script type="module" src="${file('_people.js')}"></script>`
+      ? `<script type="module" src="${module('_people.js')}"></script>`
       : ''
   }${
     main.includes('data-operator-view=')
-      ? `<script type="module" src="${file('_operator-settings.js')}"></script>`
+      ? `<script type="module" src="${
+        module('_operator-settings.js')
+      }"></script>`
       : ''
   }${
     main.includes('data-matches-view=')
-      ? `<script type="module" src="${file('_matches.js')}"></script>`
+      ? `<script type="module" src="${module('_matches.js')}"></script>`
       : ''
   }${
     main.includes('data-dashboard-view=')
-      ? `<script type="module" src="${file('_dashboard.js')}"></script>`
+      ? `<script type="module" src="${module('_dashboard.js')}"></script>`
       : ''
   }${
     main.includes('data-visits-view=')
-      ? `<script type="module" src="${file('_visits.js')}"></script>`
+      ? `<script type="module" src="${module('_visits.js')}"></script>`
       : ''
   }${
     main.includes('data-payment-view=')
-      ? `<script type="module" src="${file('_payment.js')}"></script>`
+      ? `<script type="module" src="${module('_payment.js')}"></script>`
       : ''
   }${
     main.includes('data-space-view=')
-      ? `<script type="module" src="${file('_space-pages.js')}"></script>`
+      ? `<script type="module" src="${module('_space-pages.js')}"></script>`
       : ''
   }${
     main.includes('data-connections-view=')
-      ? `<script type="module" src="${file('_connections.js')}"></script>`
+      ? `<script type="module" src="${module('_connections.js')}"></script>`
       : ''
   }${
     main.includes('data-chart')
-      ? `<script type="module" src="${file('chart.js')}"></script>`
+      ? `<script type="module" src="${module('chart.js')}"></script>`
       : ''
   }${
     main.includes('data-contents')
-      ? `<script type="module" src="${file('_contents.js')}"></script>`
+      ? `<script type="module" src="${module('_contents.js')}"></script>`
       : ''
   }${
     main.includes('data-fit-list')
-      ? `<script type="module" src="${file('_fit-list.js')}"></script>`
+      ? `<script type="module" src="${module('_fit-list.js')}"></script>`
       : ''
   }${
     main.includes('data-swipe')
-      ? `<script type="module" src="${file('_swipe.js')}"></script>`
+      ? `<script type="module" src="${module('_swipe.js')}"></script>`
       : ''
   }${
     main.includes('data-app-mark')
-      ? `<script type="module" src="${file('_image-fallback.js')}"></script>`
+      ? `<script type="module" src="${module('_image-fallback.js')}"></script>`
       : ''
   }${
     main.includes('<form')
-      ? `<script type="module" src="${file('_sending.js')}"></script>`
+      ? `<script type="module" src="${module('_sending.js')}"></script>`
       : ''
   }${
     main.includes('data-menu')
@@ -323,15 +328,17 @@ ${
       : ''
   }${
     main.includes('data-save=') || main.includes('data-bind-save')
-      ? `<script type="module" src="${file('_settings.js')}"></script>`
+      ? `<script type="module" src="${module('_settings.js')}"></script>`
       : ''
   }${
     main.includes('data-alerts-offer')
-      ? `<script type="module" src="${file('_alerts.js')}"></script>`
+      ? `<script type="module" src="${module('_alerts.js')}"></script>`
       : ''
   }<script src="${file('drop.js')}" defer></script><script type="module" src="${
-    file('away.js')
-  }" data-home="${esc(apex(env))}"></script>${deployed(env)}</body>
+    module('away.js')
+  }" data-home="${esc(apex(env))}"></script>${deployed(env)}${
+    preloads(scripts)
+  }</body>
 </html>`
   return new Response(staged(open, close, later), {
     status,

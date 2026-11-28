@@ -7,12 +7,12 @@
 // The nav is the same places on every page of this site or it is not a
 // nav (site_test.ts), and the footer the same seven. A drawn page says them
 // exactly as the files say them.
-import type { ReactElement } from 'react'
+import { createElement as h, type ReactElement } from 'react'
 import { esc, markup } from './html.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { asset, links } from './sheets.ts'
 import { island, signedIn } from '@yaks/platform/site-nav'
-import { idle } from './mascot.ts'
+import { Idle } from './mascot.ts'
 import { tags as previewTags } from './link-preview.ts'
 
 // What every drawn page wears in its head, in the shape the file pages wear it
@@ -44,10 +44,11 @@ ${links(env, 'style.css')}
   }"></script>
 ${island(asset(env, '_ready.js'))}`
 
+// The yak at the site's top and foot (mascot.ts `Idle`).
+let yak = markup(h(Idle, { className: 'Yak Yak-small' }))
+
 export let top = `<header class="Top">
-<a class="Top_Name" href="/" aria-label="yaks.app, home">${
-  idle('Yak Yak-small')
-}<span>yaks.app</span></a>
+<a class="Top_Name" href="/" aria-label="yaks.app, home">${yak}<span>yaks.app</span></a>
 <nav class="Nav" aria-label="Site">
 <a class="Nav_Link" href="/#how">How it works</a>
 <a class="Nav_Link" href="/gallery">Gallery</a>
@@ -59,7 +60,7 @@ ${signedIn}
 </header>`
 
 export let foot = `<footer class="Foot">
-${idle('Yak Yak-small')}
+${yak}
 <p>yaks.app · Yak Shaving LLC</p>
 <ul class="Foot_Links">
 <li><a class="Foot_Link" href="/help">Help</a></li>

@@ -20,7 +20,6 @@
 // (operator-aside.ts `showing`).
 
 import { createElement as h } from 'react'
-import { markup as renderToString } from '@yaks/html'
 import { Loading } from '@yaks/ui/parts'
 
 /** What the yak can be seen doing. */
@@ -60,10 +59,6 @@ export let Yak = ({ pose, base = '' }: { pose: Pose; base?: string }) =>
       }),
     ),
   )
-
-/** The yak doing `pose`, as markup. */
-export let yak = (pose: Pose, base = '') =>
-  renderToString(h(Yak, { pose, base }))
 
 /** What the yak does now and then while he waits, each loop this many ms,
  * starting and ending on his rest frame so one follows another seamlessly. */
@@ -114,7 +109,3 @@ export let Idle = ({ className, base = '', size = 128 }: {
     'data-idle': Object.entries(IDLE).map(([loop, ms]) => `${loop}:${ms}`)
       .join(' '),
   })
-
-/** The yak waiting, as markup. */
-export let idle = (className?: string, base = '') =>
-  renderToString(h(Idle, { className, base }))

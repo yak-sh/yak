@@ -15,8 +15,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph/identity'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
@@ -42,10 +41,10 @@ export let drawMatches = (
   view: MatchesView,
   read: Matches,
 ): void => {
-  let t = root.ownerDocument.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, matchesView(view, read)))
   let next = root.cloneNode(false) as HTMLElement
-  next.append(t.content)
+  next.append(
+    fragment(root.ownerDocument, matchesView(view, read)),
+  )
   morph(root, next, KEPT)
 }
 

@@ -54,7 +54,7 @@ import {
   type PaymentView,
   paymentView,
 } from '@yaks/platform/payment-view'
-import { yak } from './mascot.ts'
+import { Yak } from './mascot.ts'
 
 import {
   type DeskPage,
@@ -380,7 +380,7 @@ let payment = (at: DeskPage, env: Host, view: 'selling' | 'billing') => {
     view,
     space: { eid: at.spaceEid ?? '', slug: at.space, title: named(picked(at)) },
     apex: apex(env),
-    loading: markup(yak('calculating')),
+    loading: markup(h(Yak, { pose: 'calculating' })),
   }
   let drawn = paymentOf(shown.space.eid, rows)
   return h(

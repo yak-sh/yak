@@ -9,8 +9,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Bundle } from '@yaks/graph'
 import type { Client } from '@yaks/client'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
@@ -31,11 +30,9 @@ export let drawShared = (
   rows: Bundle[],
 ): void => {
   let next = root.cloneNode(false) as HTMLElement
-  let t = root.ownerDocument.createElement('template')
-  t.innerHTML = renderToString(
-    h(Fragment, null, sharedView(view, sharedOf(rows))),
+  next.append(
+    fragment(root.ownerDocument, sharedView(view, sharedOf(rows))),
   )
-  next.append(t.content)
   morph(root, next, KEPT)
 }
 

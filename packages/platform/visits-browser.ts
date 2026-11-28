@@ -9,8 +9,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Bundle } from '@yaks/graph'
 import type { Client } from '@yaks/client'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
@@ -21,12 +20,6 @@ import { type VisitsView, visitsView } from './visits-view.ts'
 
 /** The Visits view. */
 export let VIEW = '[data-view="visits"]'
-
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content
-}
 
 // The rows the page carried for its first paint stay as they are.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
@@ -39,7 +32,7 @@ export let drawVisits = (
 ): void => {
   let next = root.cloneNode(false) as HTMLElement
   next.append(
-    made(
+    fragment(
       root.ownerDocument,
       visitsView(
         view,

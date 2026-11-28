@@ -14,8 +14,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
 import { copying, shown } from '@yaks/ui/copy-browser'
@@ -28,12 +27,6 @@ import { nameFrom } from './page-parts.ts'
 
 /** The Agents and New app view. */
 export let VIEW = '[data-view="agents"]'
-
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content
-}
 
 // The rows the page carried for its first paint stay as they are.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
@@ -57,7 +50,7 @@ export let bindAgents = (
   let draw = () => {
     if (!agents.ready) return
     let next = root.cloneNode(false) as HTMLElement
-    next.append(made(
+    next.append(fragment(
       root.ownerDocument,
       agentsView(view, agentsOf(agents.value), { leaving: going, said }),
     ))

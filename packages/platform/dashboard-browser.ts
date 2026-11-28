@@ -16,8 +16,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { actionWords, REDRAWN } from '@yaks/inbox/actions-browser'
@@ -52,10 +51,10 @@ let paint = (
   view: DashboardView,
   read: Dashboard,
 ): void => {
-  let t = root.ownerDocument.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, dashboardView(view, read)))
   let next = root.cloneNode(false) as HTMLElement
-  next.append(t.content)
+  next.append(
+    fragment(root.ownerDocument, dashboardView(view, read)),
+  )
   morph(root, next, KEPT)
   root.dispatchEvent(
     new (root.ownerDocument.defaultView ?? globalThis).Event(REDRAWN, {

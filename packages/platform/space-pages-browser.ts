@@ -16,8 +16,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Bundle } from '@yaks/graph'
 import type { Client, Watch } from '@yaks/client'
 import { mint } from '@yaks/graph'
@@ -62,9 +61,9 @@ export let drawSpace = (
   let rows = heldRows(view, held)
   if (!rows) return
   let next = root.cloneNode(false) as HTMLElement
-  let t = root.ownerDocument.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, spacePageView(view, rows)))
-  next.append(t.content)
+  next.append(
+    fragment(root.ownerDocument, spacePageView(view, rows)),
+  )
   morph(root, next, KEPT)
 }
 

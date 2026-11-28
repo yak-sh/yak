@@ -10,10 +10,9 @@
  *
  * @module
  */
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
-import { createElement as h, Fragment } from 'react'
+import { fragment } from '@yaks/html/dom'
 import type { Client, Watch } from '@yaks/client'
-import { leaving, PAGE } from '@yaks/ui/navigate'
+import { leaving, morph, PAGE } from '@yaks/ui/navigate'
 import { accountWords, FRIENDS, friendsOf } from './account-rows.ts'
 import { appsOf, sideApps, sideWords } from './side-rows.ts'
 import { dayOf, dayVisits, visitWords } from './visit-counts.ts'
@@ -37,11 +36,10 @@ export let bindDay = (
     let day = graph.watch(dayVisits(space))
     let mates = friends ? graph.watch(FRIENDS) : undefined
     watched = [apps, day, ...mates ? [mates] : []]
-    let drawn = ''
     let draw = () => {
-      let said = renderToString(h(
-        Fragment,
-        null,
+      let next = root.cloneNode(false) as HTMLElement
+      next.append(fragment(
+        root.ownerDocument,
         dayCards(
           day.ready
             ? dayLine(appsOf(apps.value, space), dayOf(day.value, space))
@@ -49,7 +47,7 @@ export let bindDay = (
           mates?.ready ? friendsLine(friendsOf(mates.value)) : '',
         ),
       ))
-      if (said != drawn) root.innerHTML = drawn = said
+      morph(root, next)
     }
     for (let w of watched) w.subscribe(draw)
     draw()

@@ -13,9 +13,10 @@ import { openingHead } from '@yaks/web/opening'
 import { importMap } from './page-imports.ts'
 
 declare const YAK_NAMED: Record<string, string> | undefined
-declare const YAK_CHAT_CHUNKS: string[] | undefined
+declare const YAK_CHUNKS: Record<string, string[]> | undefined
 
 let NAMES = typeof YAK_NAMED == 'undefined' ? {} : YAK_NAMED
+let CHUNKS = typeof YAK_CHUNKS == 'undefined' ? {} : YAK_CHUNKS
 
 /** Where a page fetches one of the site's files: its content-made address,
  * which the browser keeps for good, or its source's where none was made. */
@@ -26,21 +27,36 @@ export let asset = (
   base = url(env, '/'),
 ) => base + (names[name] ?? name)
 
+/** The chunks the page scripts `names` import, preloaded: a phone fetches
+ * them beside the scripts, instead of learning of each from the one before.
+ * Each is at the site's root, where the scripts import it from.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let chunks = { '_a.js': ['_yak/chunk.A.js', '_yak/chunk.B.js'], '_b.js': ['_yak/chunk.B.js'] }
+ * assertEquals(
+ *   preloads(['_a.js', '_b.js', 'away.js'], chunks),
+ *   '<link rel="modulepreload" href="/_yak/chunk.A.js"><link rel="modulepreload" href="/_yak/chunk.B.js">',
+ * )
+ * ```
+ */
+export let preloads = (names: Iterable<string>, chunks = CHUNKS): string =>
+  [...new Set([...names].flatMap((name) => chunks[name] ?? []))]
+    .map((chunk) => `<link rel="modulepreload" href="/${chunk}">`).join('')
+
 /** Start the chat's modules before the parser reaches its transcript. */
-export let chatPreloads = (env: Host): string => {
-  let chunks = typeof YAK_CHAT_CHUNKS == 'undefined' ? [] : YAK_CHAT_CHUNKS
-  return [
+export let chatPreloads = (env: Host): string =>
+  [
     '_talk.js',
     '_words.js',
     '_page-client.js',
     'follow.js',
     'frames.js',
     'voice.js',
-    ...chunks,
-  ].map((name) => `<link rel="modulepreload" href="${asset(env, name)}">`).join(
-    '\n',
-  )
-}
+  ].map((name) => `<link rel="modulepreload" href="${asset(env, name)}">`)
+    .join('\n') +
+  '\n' +
+  preloads(['_talk.js', '_talk-views.js', '_updates.js', '_inbox-actions.js'])
 
 /** The store client's content-made name below an app's `api/` (apps.ts
  * `api`), or null where none was made. */

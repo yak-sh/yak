@@ -16,8 +16,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Bundle } from '@yaks/graph'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
@@ -48,12 +47,6 @@ import {
 
 /** The Operator settings view. */
 export let VIEW = '[data-view="operator-settings"]'
-
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content
-}
 
 // The rows the page carried for its first paint stay as they are.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
@@ -89,7 +82,7 @@ export let drawSettings = (
   let rows = rowsOf(held)
   if (!rows) return
   let next = root.cloneNode(false) as HTMLElement
-  next.append(made(root.ownerDocument, operatorSettingsView(view, rows)))
+  next.append(fragment(root.ownerDocument, operatorSettingsView(view, rows)))
   morph(root, next, KEPT)
   fit(root)
 }

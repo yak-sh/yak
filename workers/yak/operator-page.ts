@@ -36,7 +36,7 @@ import {
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, page as drawn, type Picked, run, script, shell } from './pages.ts'
-import { asset, chatPreloads } from './sheets.ts'
+import { asset, chatPreloads, preloads } from './sheets.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { type Ways, Ways as Reaching } from './operator-ways.ts'
 import { frame, FRAMED } from './frame.ts'
@@ -1855,7 +1855,7 @@ let openingParts = (
     skip: ['#ask', 'Skip to the message box'],
     script: `<script type="module" async src="${
       asset(env, '_operator-opening.js')
-    }"></script>`,
+    }"></script>${preloads(['_operator-opening.js'])}`,
     aside: beside.ways && h(Aside, {
       aside,
       now: Date.now(),
@@ -2553,7 +2553,7 @@ let chatScript = (
   `<script type="module" data-operator-chat="${visit}">
 import { follow } from '${file('follow.js')}'
 import { frames } from '${file('frames.js')}'
-import { asideHtml, browserDrafts, covers, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, rememberChat, selfHtml, showing, sleep, takeEarlyDraft, turnHtml } from '${
+import { asideDrawn, browserDrafts, covers, dates, glanceDrawn, helperDrawn, leaving, long, markDrawn, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, rememberChat, selfDrawn, showing, sleep, takeEarlyDraft, turnDrawn } from '${
     file('_talk.js')
   }'
 import words from '${file('_words.js')}'
@@ -2819,11 +2819,6 @@ let working = () => talk.working()
 // sight, wears their summary, drawn again with each.
 let happening = ${script(now)}
 let aside = () => document.querySelector('[data-aside]')
-let drawn = (html) => {
-  let made = document.createElement('template')
-  made.innerHTML = html
-  return made.content.firstElementChild
-}
 let shown = () => {
   let a = aside()
   if (!a) return
@@ -2833,7 +2828,7 @@ let shown = () => {
   let reach = !!a.querySelector('[data-reach]')
   a.hidden = !helping && !reach && !turn && !happening.self
   for (let glance of document.querySelectorAll('[data-glance]')) {
-    let next = drawn(glanceHtml(happening))
+    let next = glanceDrawn(document, happening)
     glance.replaceWith(next)
     let open = next.closest('[data-aside-open]')
     open?.setAttribute('aria-description', next.dataset.label)
@@ -2853,7 +2848,7 @@ let turning = (turn) => {
   if (happening.self) return
   happening.turn = turn ?? null
   let at = aside()?.querySelector('[data-turn]')
-  if (at) at.replaceWith(drawn(turnHtml(happening.turn)))
+  if (at) at.replaceWith(turnDrawn(document, happening.turn))
   shown()
 }
 // A helper's row, put in place wherever the page draws it (operator-aside.ts
@@ -2864,23 +2859,23 @@ let turning = (turn) => {
 let helped = (helper) => {
   let at = '[data-help="' + helper.session + '"]'
   // The Helpers box folds where it runs; a fold pressed open stays open.
-  let html = (row) => {
+  let made = (row) => {
     let fold = !!row?.closest('[data-helping]')
-    return helperHtml(helper, Date.now(), fold, !!row?.querySelector('[data-fold]')?.open)
+    return helperDrawn(document, helper, Date.now(), fold, !!row?.querySelector('[data-fold]')?.open)
   }
   if (helper.session == talk.task()) {
     happening.self = helper
-    document.querySelector('[data-self] [data-help]')?.replaceWith(drawn(selfHtml(helper)))
+    document.querySelector('[data-self] [data-help]')?.replaceWith(selfDrawn(document, helper))
     let mark = document.querySelector('[data-title] [data-mark]')
-    if (mark) mark.innerHTML = markHtml(helper.standing)
+    mark?.replaceChildren(markDrawn(document, helper.standing))
     return shown()
   }
-  for (let row of document.querySelectorAll(at)) row.replaceWith(drawn(html(row)))
+  for (let row of document.querySelectorAll(at)) row.replaceWith(made(row))
   happening.helpers = ordered([helper, ...happening.helpers.filter((h) => h.session != helper.session)])
   show()
   let list = aside()?.querySelector('[data-helping]')
   if (!list) return
-  if (!list.querySelector(at)) list.prepend(drawn(helperHtml(helper, Date.now(), true)))
+  if (!list.querySelector(at)) list.prepend(helperDrawn(document, helper, Date.now(), true))
   shown()
   lengthy()
 }
@@ -3037,7 +3032,7 @@ let read = async () => {
       if (got.aside && aside()) {
         // The ways to reach the Operator are drawn once, and stay below the helpers.
         let reach = aside().querySelector('[data-reach]')
-        happening = got.aside, aside().replaceWith(drawn(asideHtml(happening)))
+        happening = got.aside, aside().replaceWith(asideDrawn(document, happening))
         if (reach) aside().querySelector('[data-helpers]').after(reach)
         shown(), show()
       }

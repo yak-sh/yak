@@ -13,8 +13,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
@@ -34,12 +33,6 @@ import './updates-day-browser.ts'
 
 /** The Updates cards view. */
 export let VIEW = '[data-view="updates"]'
-
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content
-}
 
 // What a redraw leaves as it is: what the person opened, and the rows the
 // page carried for its first paint.
@@ -107,7 +100,7 @@ export let bindUpdates = (
     let apps = new Map(lines.map((l, i) => [l.eid, shelves[i]]))
     let next = root.cloneNode(false) as HTMLElement
     next.append(
-      made(
+      fragment(
         root.ownerDocument,
         cardsView(
           view,

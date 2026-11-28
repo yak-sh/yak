@@ -14,8 +14,8 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { createElement as h, type ReactNode } from 'react'
+import { fragment } from '@yaks/html/dom'
 import type { Bundle } from '@yaks/graph'
 import type { Client, Watch } from '@yaks/client'
 import { morph, PAGE } from '@yaks/ui/navigate'
@@ -30,11 +30,8 @@ let OPEN = { keeps: (_: Element, name: string) => name == 'open' }
 export let SIDE = '[data-side-view]'
 
 // The element `node` draws, in `doc`.
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content.firstElementChild!
-}
+let made = (doc: Document, node: ReactNode) =>
+  fragment(doc, node).firstElementChild!
 
 // Lay `next` over the region `part` of `root`, or put it in before `before`
 // where the page has none, or take the region away where `next` is none.

@@ -12,8 +12,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { fragment } from '@yaks/html/dom'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
@@ -31,12 +30,6 @@ import { sideWords } from './side-rows.ts'
 
 /** The People view. */
 export let VIEW = '[data-view="people"]'
-
-let made = (doc: Document, node: ReactNode) => {
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(h(Fragment, null, node))
-  return t.content
-}
 
 // What a redraw leaves: the rows the page carried for its first paint.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
@@ -57,7 +50,7 @@ export let drawPeople = (
   if (!rows.holders.length) return
   let next = root.cloneNode(false) as HTMLElement
   next.append(
-    made(root.ownerDocument, peopleView(view, peopleRows(view, rows))),
+    fragment(root.ownerDocument, peopleView(view, peopleRows(view, rows))),
   )
   morph(root, next, KEPT)
 }

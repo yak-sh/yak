@@ -9,7 +9,7 @@
  * @module
  */
 import { createElement as h, type ReactNode as Kids } from 'react'
-import { raw } from '@yaks/html'
+import { raw } from '@yaks/html/raw'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Logo } from '@yaks/ui/Logo'

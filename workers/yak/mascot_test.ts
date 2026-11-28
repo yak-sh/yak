@@ -6,7 +6,9 @@ import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'
 import { frame, talk } from './operator-view.ts'
 import { shell } from './pages.ts'
-import { IDLE, idle, MOVES } from './mascot.ts'
+import { IDLE, Idle, MOVES } from './mascot.ts'
+import { createElement as h } from 'react'
+import { markup } from '@yaks/html'
 
 let env = { APEX: 'yaks.fyi' }
 let entry = (eid: string, seq: number, comps: Record<string, unknown>) =>
@@ -101,7 +103,7 @@ test('the waiting yak is drawn at the size it shows, at every density', async ()
     'Message Elihu',
     null,
     200,
-    idle('Composer_Figure'),
+    markup(h(Idle, { className: 'Composer_Figure' })),
   )
     .text()
   let img = parseHTML(page).document.querySelector('img[data-idle]')!
@@ -126,7 +128,7 @@ let waiting = (
   net = (_file: string) => true,
 ) => {
   let { document, Event, CustomEvent, MutationObserver } = parseHTML(
-    `<main>${idle('Composer_Figure')}</main>`,
+    `<main>${markup(h(Idle, { className: 'Composer_Figure' }))}</main>`,
   )
   let img = document.querySelector('img')!
   // each timer by its id; a cleared one is dropped

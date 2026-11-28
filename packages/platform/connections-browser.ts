@@ -23,8 +23,7 @@
  *
  * @module
  */
-import { createElement as h, Fragment } from 'react'
-import { markup as renderToString } from '@yaks/html'
+import { fragment } from '@yaks/html/dom'
 import type { Bundle } from '@yaks/graph'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
@@ -109,12 +108,10 @@ export let drawConnections = (
   // A dialog closes before its content goes, so the page behind it is
   // let go of as it was taken.
   if (!opened && dialog?.open) dialog.close()
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(
-    h(Fragment, null, connectionsView(view, c, opened)),
-  )
   let next = root.cloneNode(false) as HTMLElement
-  next.append(t.content)
+  next.append(
+    fragment(doc, connectionsView(view, c, opened)),
+  )
   morph(root, next, KEPT)
   dialog = root.querySelector<HTMLDialogElement>('dialog')
   if (opened && dialog && !modal(dialog)) {
