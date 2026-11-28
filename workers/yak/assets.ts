@@ -46,10 +46,6 @@ let paged = { external }
 // load once. A script more in the group cuts what they share into more pieces,
 // and a phone on a slow network waits on each one.
 let operator = { external, split: 'operator' }
-// React and React DOM as the page's import map names them, made together so
-// each module of React is one the page runs once.
-let react = { split: 'react', named: true }
-
 /** The files of the site but those it draws (`drawn`). */
 export let ASSETS: Asset[] = [
   { name: '_client.js', bundle: of('@yaks/platform/client'), named: true },
@@ -66,15 +62,8 @@ export let ASSETS: Asset[] = [
   { name: '_dates.js', bundle: here('./dates-browser.ts'), named: true },
   // Edit mode on an app's page, loaded by its pencil (public/edit.js).
   { name: '_edit.js', bundle: of('@yaks/platform/edit-mode') },
-  // React, and React DOM, for every platform page (./page-imports.ts).
-  { name: '_react.js', bundle: here('./react/react.ts'), ...react },
-  { name: '_react-jsx.js', bundle: here('./react/jsx-runtime.ts'), ...react },
-  { name: '_react-dom.js', bundle: here('./react/react-dom.ts'), ...react },
-  {
-    name: '_react-dom-client.js',
-    bundle: here('./react/react-dom-client.ts'),
-    ...react,
-  },
+  // React and React DOM, for every platform page (./page-imports.ts).
+  { name: '_react.js', bundle: here('./page-react.ts'), named: true },
   // The Operator chat's conversation (operator-rows.ts), for its page alone.
   { name: '_page-client.js', bundle: of('@yaks/client'), named: true },
   {
