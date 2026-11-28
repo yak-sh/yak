@@ -91,7 +91,7 @@ test('every guide page draws under its own heading', async () => {
     let html = await read(pathOf(p.slug))
     let name = heading(p.slug)
     let { document } = parseHTML(html)
-    assertStringIncludes(html, `<title>${esc(name)} · yaks.app</title>`)
+    assertEquals(document.title, `${name} · yaks.app`)
     assertEquals(
       document.querySelector('meta[name=description]')?.getAttribute('content'),
       p.description,
@@ -99,10 +99,11 @@ test('every guide page draws under its own heading', async () => {
     assertEquals((html.match(/<h1[\s>]/g) ?? []).length, 1, p.slug)
     // The document itself, not its frontmatter: the heading opens the
     // article, which is what the sidebar and the contents list sit beside.
-    assertStringIncludes(
-      html.split('<article')[1].slice(0, 160),
-      `>${esc(name)}</h1>`,
+    assertEquals(
+      document.querySelector('article .Body')?.firstElementChild?.localName,
+      'h1',
     )
+    assertEquals(document.querySelector('article h1')?.textContent, name)
     assertEquals(
       document.querySelector('.Docs_Back a')?.textContent,
       '← Documentation',
@@ -235,7 +236,10 @@ test('a documentation move keeps the query', async () => {
   ) {
     let req = new Request(`https://yaks.app${was}?ref=hn`)
     let said = await answer(req, site(), was)
-    assertEquals(said!.headers.get('location'), `https://yaks.app${now}?ref=hn`)
+    assertEquals(
+      said!.headers.get('location'),
+      `https://yaks.app${now}?ref=hn`,
+    )
   }
 })
 

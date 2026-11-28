@@ -271,7 +271,10 @@ test('an app is published by name, and the name is one app', async () => {
 
     // Only an owner may: an editor writes the app's files and does not hand
     // its code to strangers.
-    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
+    let ann = await signIn(
+      k,
+      `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`,
+    )
     await agent.tool('member_add', {
       space: mine,
       email: ann.email,
@@ -428,7 +431,9 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     let admin = { cookie: k.owner.cookie }
     let drawn = await k.at('yaks.app', yes, { headers: admin })
     assertEquals(drawn.status, 200)
-    assertStringIncludes(await drawn.text(), '<form method="post"')
+    assert(
+      parseHTML(await drawn.text()).document.querySelector('form[method=post]'),
+    )
     let token = new URLSearchParams(yes.split('?')[1]).get('t')!
     let answer = (headers: Record<string, string>) =>
       k.at('yaks.app', '/gallery/review', {
@@ -671,7 +676,11 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     })).structuredContent.result[0]?.entity.eid
     assertEquals(skipped?.by.eid, person)
     assertEquals(skipped?.decision, 'approved')
-    await agent.tool('app_set', { space: mine, app: 'recipes', gallery: false })
+    await agent.tool('app_set', {
+      space: mine,
+      app: 'recipes',
+      gallery: false,
+    })
     // An app that was never published cannot be shown: the gallery is what a
     // person can install.
     await agent.tool('app_new', { slug: 'draft', title: 'Draft' })
@@ -793,7 +802,10 @@ test('an installed app is the installer own copy, data and all', async () => {
     await cast(his, 'jeff')
 
     // A second person, in their own space, takes it.
-    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
+    let ann = await signIn(
+      k,
+      `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`,
+    )
     let hers = connector(k, ann.cookie)
     let space = ann.email.split('@')[0]
     assertStringIncludes(await hers.tool('app_published'), `- ${published} v1`)

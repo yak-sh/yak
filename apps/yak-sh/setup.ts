@@ -7,8 +7,10 @@
 import {
   createElement as h,
   type FunctionComponent,
+  useCallback,
   useEffect,
   useState,
+  useSyncExternalStore,
 } from 'react'
 import { type Phase, PHASES } from '@yaks/graph/plugin'
 import type { Bundle } from '@yaks/graph'
@@ -117,8 +119,14 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
   let refused = !!row?.signin_refused
   useEffect(() => {
     if (refused && !yak.drafts.text(PLACE)) yak.drafts.restore(PLACE, address)
-  }, [refused])
-  let typed = yak.drafts.text(PLACE)
+  }, [yak, ask?.eid, refused, address])
+  let draft = useCallback(() => yak.drafts.text(PLACE), [yak])
+  let follow = useCallback((changed: () => void) =>
+    yak.drafts.follow(() => {
+      draft()
+      changed()
+    }), [draft])
+  let typed = useSyncExternalStore(follow, draft, draft)
   let stages = ask
     ? stagesOf(ask.change.steps, ask.eid, ask.later)
     : new Map<Phase, Bundle>()
@@ -153,7 +161,7 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
             id: 'setup-address',
             type: 'email',
             name: 'address',
-            autocomplete: 'email',
+            autoComplete: 'email',
             placeholder: 'you@example.com',
             required: true,
             value: typed,

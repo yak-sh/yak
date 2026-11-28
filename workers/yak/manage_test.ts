@@ -412,9 +412,12 @@ test('a space’s Settings save its address and its name through the page graph'
   assertEquals(refused.status, 400)
   assertStringIncludes((await refused.json()).message, 'lowercase letters')
   await save({ title: 'Peterson Reunion 2027', slug })
-  assertStringIncludes(
-    await (await get(settings)).text(),
-    'name="title" maxlength="60" value="Peterson Reunion 2027"',
+  let { document } = parseHTML(await (await get(settings)).text())
+  assertEquals(
+    document.querySelector('input[name=title][maxlength="60"]')?.getAttribute(
+      'value',
+    ),
+    'Peterson Reunion 2027',
   )
   assertEquals(await title(), name)
   // The posts the page no longer makes are no page's.

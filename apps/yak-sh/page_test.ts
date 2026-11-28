@@ -658,11 +658,13 @@ test('an address the door refuses goes back in the box, and a door that is busy 
   let refusing = door(400)
   let one = await open({ post: refusing.post })
   let s = setup(one.root)
-  s.type('not an address')
-  s.send()
-  await one.settle()
-  match(s.told(), /isn't an email address/)
-  equal(s.input.value, 'not an address')
+  for (let address of ['not an address', 'still not an address']) {
+    s.type(address)
+    s.send()
+    await one.settle()
+    match(s.told(), /isn't an email address/)
+    equal(s.input.value, address)
+  }
   one.page.page.close()
 
   let busy = door(503, 200)

@@ -152,11 +152,11 @@ export let mountTalk = (
     draw()
   }
   // Each line a step sent, drawn from its entries as the server draws it.
-  let shown = (talk: Held) =>
-    talk.lines.map((line) => {
+  let shown = ({ lines, beside }: Pick<Held, 'lines' | 'beside'>) =>
+    lines.map((line) => {
       if (!line.uses) return { id: line.id, html: line.html }
       let [drawn] = drawLines({
-        ...talk.beside,
+        ...beside,
         lines: [{ id: line.id, uses: line.uses, of: line.of }],
         entries: line.uses.flatMap((eid) => front.ent(eid) ?? []),
       })
@@ -176,13 +176,13 @@ export let mountTalk = (
       ...talk.now ? {} : { now: 'Sending…', pending: true },
     }
   }
-  let tree = (talk: Held) =>
+  let tree = ({ beside, ...talk }: Held) =>
     h(
       Host.Provider,
       { value: opening(mentions) },
       h(Talk, {
         ...talk,
-        lines: shown(talk),
+        lines: shown({ lines: talk.lines, beside }),
         e: state(talk.task),
         onChange: change,
         state: (eid: string) => front.ent(eid),

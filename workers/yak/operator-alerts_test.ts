@@ -1,5 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import type { Binding } from '@yaks/cloudflare-mail'
 import type { Item } from '@yaks/model'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -155,7 +156,10 @@ test('an alert to a person who chose nothing and has an address is an email from
   assertEquals(envelope.to, ADDRESS)
   assertEquals(envelope.target, byMail.notification)
   assertEquals(envelope.message_id, 'sent-1')
-  assertEquals(typeof (byMail.letter!.delivered as { at: string }).at, 'string')
+  assertEquals(
+    typeof (byMail.letter!.delivered as { at: string }).at,
+    'string',
+  )
   assertEquals([byMail.row.mail, byMail.row.delivered], [undefined, undefined])
 })
 test('what everyone in a space is told, or a person wrote, is sent to nobody', () => {
@@ -229,7 +233,11 @@ let code = take(texted).at(-1)!.text.match(/\d{6}/)![0]
 await agree(code)
 take(texted)
 let before = (await dir.at(eid))!.meter?.texts ?? 0
-let byText = await told('Open it from your Updates.', undefined, 'Report ready')
+let byText = await told(
+  'Open it from your Updates.',
+  undefined,
+  'Report ready',
+)
 let textedAlert = take(texted)
 let spent = (await dir.at(eid))!.meter!.texts! - before
 test('an alert to a person who agreed to texts is a text to their number, signed and paid for', () => {
@@ -253,7 +261,11 @@ let afterUpdates = [take(letters), take(texted)]
 test('a person chooses how they are alerted on the Operator page', () => {
   assertEquals(wrong.status, 400)
   assertEquals(chose.said, { channel: 'email' })
-  assertStringIncludes(html, 'name="channel" value="email" checked')
+  assertEquals(
+    parseHTML(html).document.querySelector('input[name=channel][checked]')
+      ?.getAttribute('value'),
+    'email',
+  )
   assertEquals(afterEmail, [[ADDRESS], []])
   assertEquals(quiet.reaches, 'updates')
   assertEquals(afterUpdates, [[], []])
@@ -395,7 +407,11 @@ test('a person allows browser notifications on the Operator page, one subscripti
   assertEquals(allowed.map((a) => a.said), [{ browsers: 1 }, { browsers: 2 }, {
     browsers: 2,
   }])
-  assertMatch(chosePush, /value="push"[^>]*checked/)
+  assertEquals(
+    parseHTML(chosePush).document.querySelector('input[name=channel][checked]')
+      ?.getAttribute('value'),
+    'push',
+  )
   assertStringIncludes(chosePush, 'on the 2 browsers you allowed')
 })
 test('a notification for a reply in the main conversation opens its canonical page at that line', () => {

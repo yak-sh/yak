@@ -34,6 +34,13 @@ export let fragment = (doc: Document, node: ReactNode): DocumentFragment => {
   let close = draw(slotted(node, fragments), into)
   let drawn = doc.createDocumentFragment()
   try {
+    for (let input of into.querySelectorAll<HTMLInputElement>('input')) {
+      // Morph reads the new defaults from attributes, and cloning a node
+      // need not carry the live state of a control.
+      if (typeof input.defaultChecked == 'boolean') {
+        input.toggleAttribute('checked', input.defaultChecked)
+      }
+    }
     drawn.append(...[...into.childNodes].map((n) => n.cloneNode(true)))
   } finally {
     close()

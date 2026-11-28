@@ -1,4 +1,5 @@
 import { test } from '@yaks/testing'
+import { act } from '@yaks/react/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
@@ -192,26 +193,28 @@ Object.defineProperty(globalThis, 'document', {
 // The sub-thread's fold once it shows the chat, its line fetched.
 let foldText = () =>
   document.querySelector(`#row-${notice} details`)!.textContent!
-let drawn = async () => {
-  for (let i = 0; i < 50 && !foldText().includes('Tuesday'); i++) {
-    await new Promise((done) => setTimeout(done, 10))
-  }
-}
 let calls: string[] = []
+let pending: ReturnType<typeof opening> | undefined
 let talk = mountTalk({
   box: document.querySelector('[data-conversation]') as HTMLElement,
   words: pageDocs(operatorVocab.docs),
   person: 'ada',
-  unfold: (l: string) => (calls.push(l), opening(l)),
+  unfold: (l: string) => (calls.push(l), pending = opening(l)),
 })
+await act(async () => {})
 let opened = document.querySelector(`#row-${notice} details`)!
-opened.querySelector('summary')!.dispatchEvent(
-  new page.Event('click', { bubbles: true, cancelable: true }),
-)
-await drawn()
+await act(async () => {
+  opened.querySelector('summary')!.dispatchEvent(
+    new page.Event('click', { bubbles: true, cancelable: true }),
+  )
+  await pending
+})
 let drawnOpen = foldText()
-talk.read(updated.html)
-await drawn()
+await act(async () => {
+  talk.read(updated.html)
+  await pending
+})
+talk.close()
 if (prior) Object.defineProperty(globalThis, 'document', prior)
 else Reflect.deleteProperty(globalThis, 'document')
 

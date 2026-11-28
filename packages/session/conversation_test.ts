@@ -4,6 +4,7 @@
 import { equal, test } from '@yaks/testing'
 import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { createElement as h, Fragment } from 'react'
+import { parseHTML } from 'linkedom'
 import { define } from '@yaks/render'
 import type { Bundle } from '@yaks/graph'
 import {
@@ -31,10 +32,12 @@ let names = namer({
 let read = (b: Bundle, beside: Partial<Beside> = {}, registry = kinds) => {
   let said = draw(registry, b, { names, ...beside })
   if (!said) return null
-  let text = renderToString(h(Fragment, null, said.node)).replace(
+  let html = renderToString(h(Fragment, null, said.node)).replace(
     /<[^>]+>/g,
     ' ',
   )
+  let text = parseHTML(`<main>${html}</main>`).document.documentElement
+    .textContent ?? ''
   return [said.is ?? '', text.replace(/\s+/g, ' ').trim(), said.text ?? '']
 }
 

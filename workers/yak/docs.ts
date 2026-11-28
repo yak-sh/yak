@@ -145,11 +145,13 @@ let PARTS: Record<string, string> = {
   blockquote: 'Docs_Quote',
 }
 
-let prose: H<ReactNode> = (tag, props, ...children) =>
-  h(tag, {
-    ...props,
-    className: [PARTS[tag], props?.class].filter(Boolean).join(' '),
+let prose: H<ReactNode> = (tag, props, ...children) => {
+  let { class: classes, ...rest } = props ?? {}
+  return h(tag, {
+    ...rest,
+    className: [PARTS[tag], classes].filter(Boolean).join(' '),
   }, ...children)
+}
 
 // A guide is on the platform's site, so a link to another opens in a new tab.
 let said = (md: Md, env: Host, tokens: Token[]) =>

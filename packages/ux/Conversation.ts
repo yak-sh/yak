@@ -455,8 +455,15 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     older: () => {},
   })
   at.current = { ...at.current, e, onChange, state, kept }
-  let fromServer = (target: Element) =>
-    at.current.kept.has(target.closest?.('.Transcript_Row')?.id ?? '')
+  let fromServer = (target: Element) => {
+    // A grouped line can hold rows of its own, including a sub-thread.
+    let row = target.closest?.('.Transcript_Row')
+    while (row && root.current?.contains(row)) {
+      if (at.current.kept.has(row.id)) return true
+      row = row.parentElement?.closest('.Transcript_Row') ?? null
+    }
+    return false
+  }
   let say = (away: boolean) => {
     if (away == at.current.away) return
     at.current.away = away

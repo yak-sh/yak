@@ -1,20 +1,16 @@
 // The box a key is pasted in, as a live page draws it: asked for while the
 // connection needs a key or its last was refused, gone once it is connected;
 // what was typed goes to `save`, and the box is emptied.
-import { test, until } from '@yaks/testing'
+import { cleanup, test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { createElement as h } from 'react'
 import { render } from '@yaks/react/draw'
-import { parseHTML } from 'linkedom'
+import { stage } from '../react/test-dom.ts'
 import { KeyForm, type Pasted } from './form.ts'
 
 let drawn = (status: string) => {
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
-  let root = document.querySelector('main')!
+  let { root, free } = stage()
+  cleanup(free)
   let saved: Pasted[] = []
   let draw = (status: string) =>
     render(
@@ -39,7 +35,10 @@ let submitted = async (status: string, key: string) => {
   // linkedom's form has no reset, as a browser's has
   form.reset = () => root.querySelectorAll('input').forEach((i) => i.value = '')
   form.dispatchEvent(
-    new root.ownerDocument.defaultView!.Event('submit', { cancelable: true }),
+    new root.ownerDocument.defaultView!.Event('submit', {
+      bubbles: true,
+      cancelable: true,
+    }),
   )
   await until(() => saved.length > 0, { label: 'saved' })
   return drawing

@@ -6,6 +6,7 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { parseHTML } from 'linkedom'
 import { accountEid, messageEid, roomEid, type Said } from '@yaks/chat'
 import { registration, seeds } from '@yaks/connections'
 import { integrationLogo } from '@yaks/platform/routes'
@@ -70,13 +71,14 @@ test('Discord is offered once yaks.app keeps its bot, with the account a person 
 })
 
 test('each button posts to the connections page, naming the integration still in testing', () => {
-  assertStringIncludes(
-    card,
-    `method="post" action="/manage/ana/connections?enable=discord"`,
-  )
-  assertStringIncludes(
-    card,
-    `method="post" action="/manage/ana/connections?enable=discord-account"`,
+  let { document } = parseHTML(card)
+  assertEquals(
+    [...document.querySelectorAll('form[method=post]')].map((form) =>
+      form.getAttribute('action')
+    ),
+    ['discord', 'discord-account'].map((name) =>
+      `/manage/ana/connections?enable=${name}`
+    ),
   )
   assertStringIncludes(card, 'name="integration" value="discord"')
   assertStringIncludes(card, 'Add Kit to a Discord server you manage.')
@@ -106,13 +108,26 @@ let drawn = async (...servers: Server[]) =>
 
 test("each server's channels are offered to hear in full, the chosen one picked", async () => {
   let card = await drawn(server([['1', 'general'], ['2', 'barn']], '2'))
-  assertStringIncludes(card, `method="post" action="${AT}?chat=1"`)
-  assertStringIncludes(card, 'name="connection" value="c1"')
-  assertStringIncludes(card, '<option value>None, only what is said to it')
-  assertStringIncludes(card, '<option value="1">#general</option>')
-  assertStringIncludes(card, '<option value="2" selected>#barn</option>')
+  let { document } = parseHTML(card)
+  let form = document.querySelector(`form[method=post][action="${AT}?chat=1"]`)
+  assertEquals(
+    form?.querySelector('input[name=connection]')?.getAttribute('value'),
+    'c1',
+  )
+  assertEquals(
+    [...form!.querySelectorAll('option')].map((option) => [
+      option.getAttribute('value'),
+      option.textContent,
+      option.hasAttribute('selected'),
+    ]),
+    [
+      ['', 'None, only what is said to it', false],
+      ['1', '#general', false],
+      ['2', '#barn', true],
+    ],
+  )
   assertStringIncludes(
-    await drawn(server(null)),
+    parseHTML(await drawn(server(null))).document.documentElement.textContent!,
     "Discord did not list this server's channels just now.",
   )
 })
@@ -727,7 +742,11 @@ test("a room is read back by its connection's bot, only in the servers it serves
       [['m0', 'barn']],
     )
     await assertRejects(() => read(ours, 'lobby'), Error, 'not in its')
-    await assertRejects(() => read(gone, 'general', 'barn'), Error, 'no server')
+    await assertRejects(
+      () => read(gone, 'general', 'barn'),
+      Error,
+      'no server',
+    )
     assertEquals(asked, [
       'GET channels/general/messages?before=m1&limit=30',
       'GET channels/lobby',
@@ -778,7 +797,10 @@ test("yaks.app's bot goes by its space's Operator's name in the server it was ad
   try {
     await connected(p.env, ours)
     await connected(p.env, gone)
-    await at.apply([{ entity: { eid: space.eid }, operator: { name: 'Wren' } }])
+    await at.apply([{
+      entity: { eid: space.eid },
+      operator: { name: 'Wren' },
+    }])
     await renamed(p.env, space.eid)
     let patch =
       'PATCH https://discord.com/api/v10/guilds/barn/members/@me Bot BOT'

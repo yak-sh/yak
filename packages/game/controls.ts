@@ -2,9 +2,7 @@
  * The consumer reads a named Controls bundle and applies every emitted bundle.
  * Event closures hold only DOM resources; all gesture/settings state is in Controls.
  */
-import { createElement as h } from 'react'
-import { render } from '@yaks/react/draw'
-import { Stick } from './hud.ts'
+import { mountStick } from './hud/Stick.ts'
 
 export type MotionBindings = {
   axes: Record<string, [number, number]>
@@ -336,8 +334,7 @@ export let listen = (
     unlock()
   }, { capture: true })
 
-  let base = document.createElement('div')
-  glass.append(base)
+  let stick = mountStick(glass)
   // Every event and every frame's read is a transaction; the stick is drawn
   // again only when what it shows has changed, and never once disposed.
   let painted: string | undefined
@@ -346,20 +343,16 @@ export let listen = (
     let shown = JSON.stringify(s.stick)
     if (!mounted || shown == painted) return
     painted = shown
-    render(
-      h(
-        Stick,
-        s.stick
-          ? {
-            rest: false,
-            x: s.stick.x,
-            y: s.stick.y,
-            dx: s.stick.dx * STICK,
-            dy: s.stick.dy * STICK,
-          }
-          : { rest: true },
-      ),
-      base,
+    stick.paint(
+      s.stick
+        ? {
+          rest: false,
+          x: s.stick.x,
+          y: s.stick.y,
+          dx: s.stick.dx * STICK,
+          dy: s.stick.dy * STICK,
+        }
+        : { rest: true },
     )
   }
   let rest = () => {
@@ -567,8 +560,7 @@ export let listen = (
         clear()
         unlock()
       })
-      render(null, base)
-      base.remove()
+      stick.close()
     },
     read: (dt = 1 / 60): Intent =>
       transaction(() => {

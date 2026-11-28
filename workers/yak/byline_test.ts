@@ -2,6 +2,7 @@
 // (@yaks/platform/woven `bylineOf`): off unless its owner turns it on, with
 // space_set or on the Settings page.
 import { equal, ok, test } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
 import { connector, fresh, seed, spaceAct } from './probe.ts'
 import { stamp } from './directory.ts'
 import type { Env } from './env.ts'
@@ -30,7 +31,11 @@ test('an owner turns the line on with space_set or in Settings, which offers it 
   await stamp(env, { entities: [{ entity: { eid }, plan: { tier: 'pro' } }] })
   let page = await (await settings()).text()
   ok(page.includes('Website by yaks.app'))
-  ok(/name="byline" value="on" checked/.test(page))
+  ok(
+    parseHTML(page).document.querySelector(
+      'input[name=byline][value=on][checked]',
+    ),
+  )
   // Settings' Save bar writes the box as ticked or not: unticked, the line
   // comes off; ticked, back on; saved again unchanged, it stays.
   let save = async (set: Record<string, unknown>, after: boolean) => {

@@ -3,6 +3,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { JSDOM } from 'jsdom'
 import type { Bundle } from '@yaks/graph'
 import { frame, talk } from './operator-view.ts'
 import { shell } from './pages.ts'
@@ -106,7 +107,7 @@ test('the waiting yak is drawn at the size it shows, at every density', async ()
     markup(h(Idle, { className: 'Composer_Figure' })),
   )
     .text()
-  let img = parseHTML(page).document.querySelector('img[data-idle]')!
+  let img = new JSDOM(page).window.document.querySelector('img[data-idle]')!
   assertEquals(img.getAttribute('width'), '128')
   for (let f of [img.getAttribute('src')!, ...srcset(img)]) await served(f)
   for (let loop of Object.keys(IDLE)) {
@@ -127,9 +128,9 @@ let waiting = (
   loads = (_url: string) => true,
   net = (_file: string) => true,
 ) => {
-  let { document, Event, CustomEvent, MutationObserver } = parseHTML(
+  let { document, Event, CustomEvent, MutationObserver } = new JSDOM(
     `<main>${markup(h(Idle, { className: 'Composer_Figure' }))}</main>`,
-  )
+  ).window
   let img = document.querySelector('img')!
   // each timer by its id; a cleared one is dropped
   let timers = new Map<number, [() => void, number]>()
@@ -244,7 +245,11 @@ test('while a page names a pose, he holds it at once, cutting a loop short, then
   assertEquals(yak.shown(), pose('thinking'))
   assertEquals(yak.timers.size, 1, "only the cut loop's end")
   await yak.step()
-  assertEquals(yak.shown(), pose('thinking'), 'the loop ending leaves the pose')
+  assertEquals(
+    yak.shown(),
+    pose('thinking'),
+    'the loop ending leaves the pose',
+  )
   assertEquals(yak.timers.size, 0)
   yak.posing('checking')
   await yak.settled()

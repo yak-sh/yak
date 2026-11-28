@@ -16,6 +16,25 @@ export type StickProps = {
 
 let Face = block('div', 'Stick', { Knob: 'span' })
 let pixel = (n: number) => Number.isFinite(n) ? n : 0
+let translate = (x = 0, y = 0) => `translate(${pixel(x)}px, ${pixel(y)}px)`
+
+/** The touch controls own the stick nodes and update their positions in place. */
+export let mountStick = (glass: HTMLElement) => {
+  let base = glass.ownerDocument.createElement('div')
+  let knob = glass.ownerDocument.createElement('span')
+  base.setAttribute('aria-hidden', 'true')
+  knob.className = 'Stick_Knob'
+  base.append(knob)
+  glass.append(base)
+  return {
+    paint: ({ x, y, dx, dy, rest = true }: StickProps) => {
+      base.className = rest ? 'Stick Stick-rest' : 'Stick'
+      base.style.transform = rest ? '' : translate(x, y)
+      knob.style.transform = rest ? '' : translate(dx, dy)
+    },
+    close: () => base.remove(),
+  }
+}
 
 /** A decorative face: resting by default, otherwise under the touch. */
 export let Stick: FunctionComponent<StickProps> = (
@@ -27,12 +46,12 @@ export let Stick: FunctionComponent<StickProps> = (
       mod: rest && 'rest',
       'aria-hidden': true,
       style: rest ? undefined : {
-        transform: `translate(${pixel(x)}px, ${pixel(y)}px)`,
+        transform: translate(x, y),
       },
     },
     h(Face.Knob, {
       style: rest ? undefined : {
-        transform: `translate(${pixel(dx)}px, ${pixel(dy)}px)`,
+        transform: translate(dx, dy),
       },
     }),
   )

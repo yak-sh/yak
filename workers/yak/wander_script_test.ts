@@ -6,6 +6,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { JSDOM } from 'jsdom'
 import { page as home } from './site/mod.ts'
 
 let at = (path: string) => new URL(path, import.meta.url)
@@ -116,7 +117,9 @@ let page = async (
       let was = where()
       let frames = env.frames.splice(0)
       frames.forEach((f) => f(env.now))
-      if (was.endsWith('sitting') && where().endsWith('moving')) told.push('up')
+      if (was.endsWith('sitting') && where().endsWith('moving')) {
+        told.push('up')
+      }
       await Promise.resolve()
     }
   }
@@ -159,7 +162,7 @@ let page = async (
 }
 
 test('the home page draws the yak as its logo, and loads what moves him', async () => {
-  let { document } = parseHTML(html)
+  let { document } = new JSDOM(html).window
   let logo = document.querySelector('.Hello [data-wander] img[data-idle]')!
   assert(logo.getAttribute('srcset')!.includes('mascot/idle-rest-128-3x.webp'))
   for (let script of ['idle.js', 'wander.js']) {

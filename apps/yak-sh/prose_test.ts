@@ -1,11 +1,9 @@
 // The page's words, with each mention of yaks.app a link to it.
 import { equal, test } from '@yaks/testing'
-import { parseHTML } from 'linkedom'
 import { createElement as h, type ReactNode } from 'react'
-import { render } from 'preact'
+import { mount } from '../../packages/react/test-dom.ts'
 import { Prose, words } from './prose.ts'
 
-let { document } = parseHTML('<main></main>')
 // What a node reads as, each link written [words](href target rel) and code
 // in backticks.
 let read = (n: Node): string => {
@@ -20,10 +18,12 @@ let read = (n: Node): string => {
   return `[${inner}](${href} ${target} ${rel})`
 }
 let drawn = (node: ReactNode) => {
-  Object.assign(globalThis, { document })
-  let root = document.querySelector('main')!
-  render(node, root as unknown as Element)
-  return read(root as unknown as Node)
+  let { root, free } = mount(node)
+  try {
+    return read(root)
+  } finally {
+    free()
+  }
 }
 let link = '[yaks.app](https://yaks.app _blank noopener)'
 

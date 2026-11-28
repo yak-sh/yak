@@ -4,6 +4,7 @@
 import { test } from '@yaks/testing'
 import { possessive } from '@yaks/text'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { handler } from './kernel.ts'
 import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
 import { platform } from './deploy-probe.ts'
@@ -209,7 +210,10 @@ let after = await reach()
 // then lowered to editor, and then removed from the People page (T-708).
 let mal = { person: crypto.randomUUID(), email: 'mal@example.com' }
 let homes = ['mine', 'solo', 'ours']
-let by = (person: string) => ({ 'x-yak-person': person, 'x-yak-role': 'owner' })
+let by = (person: string) => ({
+  'x-yak-person': person,
+  'x-yak-role': 'owner',
+})
 let seated = (space: string, person: string, role = 'owner') => ({
   entity: { eid: crypto.randomUUID() },
   member: { space, person, role },
@@ -270,7 +274,10 @@ test("a lowered or removed owner's Operators keep no reach beyond their seat", (
 test("a space's Operator reaches no other space until that space lets it in", () => {
   assertEquals(before.there, null)
   assertEquals(before.apps, [])
-  assertStringIncludes(offered, "Let this space's Operator work here")
+  assertStringIncludes(
+    parseHTML(offered).document.body.textContent!,
+    "Let this space's Operator work here",
+  )
   assertStringIncludes(offered, `value="${shopSpace.eid}"`)
 })
 

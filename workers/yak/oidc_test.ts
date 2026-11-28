@@ -2,6 +2,7 @@
 // the trip to Google's authorize endpoint, and the return, whose code Google's
 // token endpoint (stood in for at SIGNIN_FETCH) answers with an id_token.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { chatPath } from '@yaks/platform/routes'
@@ -169,7 +170,7 @@ test('a return that proves nothing signs nobody in and says so', async () => {
     let { r } = await s.signIn(claims, back)
     assertEquals(r.status, 400)
     assertStringIncludes(
-      (await r.text()).replaceAll('&#39;', "'"),
+      parseHTML(await r.text()).document.body.textContent!,
       why.split('.')[0],
     )
     assertEquals(await s.whoIs(r), undefined)

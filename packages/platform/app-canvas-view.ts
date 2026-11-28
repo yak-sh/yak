@@ -199,7 +199,7 @@ let preview = (
               type: 'radio',
               name: 'preview',
               value: choice.id,
-              checked: i == 0,
+              defaultChecked: i == 0,
             }),
             choice.said,
           )
@@ -253,7 +253,7 @@ export let appCanvas = (
         name: 'made',
         id: `made-${id}`,
         value: id,
-        checked: id == stage,
+        defaultChecked: id == stage,
       }),
       h(TabSet.Tab, { for: `made-${id}` }, name),
       h(

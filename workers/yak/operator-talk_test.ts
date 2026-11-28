@@ -4,6 +4,7 @@
 // draws them, a reply being written as a settled one, Stop at once, and a
 // whole read that leaves out the person's words keeps them.
 import { equal, test } from '@yaks/testing'
+import { act } from '@yaks/react/testing'
 import type { Bundle } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
 import { namer } from '@yaks/session/conversation'
@@ -195,13 +196,15 @@ test("a whole read keeps the person's words the page showed, and says it left th
   equal(p.rows()[0], rowsOf(talk(task, [asked], names))[0])
 })
 
-test('the earlier lines the server did not draw are read when the reader asks', () => {
+test('the earlier lines the server did not draw are read when the reader asks', async () => {
   let heard: { take?: number }[] = []
   using p = page(words(5), heard, 2)
   equal(p.rows().length, 2)
   let more = p.box.querySelector('[data-task] > button')!
   equal(more.textContent, 'Show 3 earlier')
-  more.dispatchEvent(new p.Event('click'))
+  await act(() =>
+    void more.dispatchEvent(new p.Event('click', { bubbles: true }))
+  )
   equal(heard, [{ take: 2 * TAKE }])
   p.talk.read(talk(task, words(5), names, {}, { take: 2 * TAKE }))
   equal(p.rows().length, 5)
