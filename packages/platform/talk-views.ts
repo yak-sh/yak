@@ -33,6 +33,8 @@ export type TalkView = {
   aside: boolean
   all: boolean
   marks: string[]
+  /** Read a fresh page when reopened, as its rows are a snapshot. */
+  snapshot?: boolean
 }
 
 /** The attribute on each view's element, holding its `TalkView`. */

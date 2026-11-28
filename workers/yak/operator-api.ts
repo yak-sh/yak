@@ -140,7 +140,7 @@ export let operatorApi = (
           person,
           space,
           50,
-          false,
+          {},
           clock.now(),
         )
         return expiring(updateRows(person, space, updates), expires)

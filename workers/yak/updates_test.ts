@@ -21,6 +21,7 @@ import { updates } from './updates.ts'
 import { AGAIN, AHEAD } from '@yaks/ui/navigate'
 import type { Telling } from './operator-updates.ts'
 import { SPACE } from './build-door.ts'
+import { updatesAt } from '@yaks/platform/updates-view'
 
 let k = await kernel()
 let slug = unique('told')
@@ -273,6 +274,74 @@ test('All updates sits above the space picker and opens with that space still se
       ?.getAttribute('href'),
     dashboardPath(club.slug),
   )
+})
+
+test('Updates searches the inbox and archive, in one space or across spaces', async () => {
+  let { own, club, get, waiting, tell } = await across()
+  let archived = 'The rain date is Sunday.'
+  let active = 'The rain date is Monday.'
+  let privateWords = 'The rain date is Tuesday.'
+  await Promise.all([
+    tell(club, { to: other.person, words: archived, subject: 'Picnic change' }),
+    tell(own, { to: other.person, words: active }),
+    tell(club, { to: person, words: privateWords }),
+  ])
+  let base = talkPath('updates', club.slug)
+  let all = `${talkPath('updates')}?in=${club.slug}`
+  let search = { q: 'RAIN date' }
+  let page = async (path: string) => {
+    let r = await get(path)
+    assertEquals(r.status, 200)
+    return parseHTML(await r.text()).document.querySelector(
+      '[data-talk-view]:not([hidden])',
+    )!
+  }
+  let list = (root: Element) =>
+    [...root.querySelectorAll('.Update_List .Update_Words')]
+      .map((card) => card.textContent?.trim())
+  let inbox = await page(updatesAt(base, { q: 'picnic SUNDAY' }))
+  assertEquals(list(inbox), [archived])
+  let dismiss = inbox.querySelector('input[name=dismiss]')!
+  let res = await k.at('yaks.app', base, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { cookie: other.cookie },
+    body: new URLSearchParams({
+      dismiss: dismiss.getAttribute('value')!,
+      back: updatesAt(all, search),
+    }),
+  })
+  assertEquals(res.status, 303)
+  assertEquals(res.headers.get('location'), updatesAt(all, search))
+  await res.body?.cancel()
+  let counted = await waiting()
+  let archive = await page(updatesAt(base, { archived: true }))
+  assertEquals(
+    archive.querySelector('nav [aria-current]')?.textContent,
+    'Archived',
+  )
+  assertEquals(list(archive), [archived])
+  assertEquals(list(await page(updatesAt(all, { archived: true }))), [archived])
+  assertEquals(list(await page(updatesAt(base, search))), [archived])
+  let found = await page(updatesAt(all, search))
+  assertEquals(list(found).sort(), [active, archived].sort())
+  assertEquals(
+    found.querySelector('form[role=search] input[name=in]')?.getAttribute(
+      'value',
+    ),
+    club.slug,
+  )
+  assertEquals(
+    found.querySelector('form[role=search] input[name=q]')?.getAttribute(
+      'value',
+    ),
+    search.q,
+  )
+  assertEquals(
+    found.querySelectorAll('.Update_List input[name=dismiss]').length,
+    1,
+  )
+  assertEquals(await waiting(), counted, 'history leaves unread counts alone')
 })
 
 test('the chat and All updates sidebars link to Admin only for the platform admin', async () => {

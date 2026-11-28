@@ -52,6 +52,7 @@ import {
   type Talk,
   talkPath,
 } from '@yaks/platform/routes'
+import { updateFilter } from '@yaks/platform/update-rows'
 import { REACH } from '@yaks/platform/page-graph'
 import { SLUG } from '@yaks/platform/names'
 import { vouched, type Who, whoIs } from './session.ts'
@@ -419,7 +420,7 @@ export let manage = async (
         space,
         who,
         sidebar(false),
-        url.searchParams.has('dismissed'),
+        updateFilter(url.searchParams),
         !lookingAhead(req),
         c,
         dir,
@@ -769,6 +770,7 @@ let everyUpdate = async (
       !lookingAhead(req),
       c,
       dir,
+      updateFilter(url.searchParams),
     ),
   )
   if (answer.ok) warmApps(env, home.space, await roster)

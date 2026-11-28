@@ -22,6 +22,7 @@ import { Form } from '@yaks/ui/Form'
 import { More } from '@yaks/ui/More'
 import { Preview } from '@yaks/ui/Preview'
 import { State } from '@yaks/ui/State'
+import { Tabs } from '@yaks/ui/Tabs'
 import { Time } from '@yaks/ui/Time'
 import { markdown } from '@yaks/session/prose'
 import { actionKinds } from '@yaks/inbox/actions'
@@ -33,6 +34,7 @@ import {
   type Shown,
   type Update,
   updateAnchor,
+  type UpdateFilter,
   updatesIn,
 } from './update-rows.ts'
 
@@ -81,11 +83,11 @@ let leads = (at: At, u: Update, apps: Apps) => {
 /** Where an update's card is drawn: its space, the zone its spaces answer
  * under, and the page it is on where that is not the space's own Updates
  * (`back`), which a choice or a dismissal returns to. */
-export type At = { space: Spot; apex: string; back?: string }
+export type At = { space: Spot; apex: string; back?: string; history?: boolean }
 
 // A reply carries a request id so sending it twice sends it once.
 let form = (
-  { space, back }: At,
+  { space, back, history }: At,
   fields: [string, string][],
   ...inner: ReactNode[]
 ) =>
@@ -95,7 +97,7 @@ let form = (
       className: 'Update_Form Page_Form',
       method: 'post',
       action: talkPath('updates', space.slug),
-      ...actionKinds.some((kind) => kind == fields[0]?.[0])
+      ...!history && actionKinds.some((kind) => kind == fields[0]?.[0])
         ? {
           'data-inbox-action': fields[0][0],
           'data-inbox-space': space.eid,
@@ -106,7 +108,7 @@ let form = (
       ...fields,
       ...back ? [['back', back] as [string, string]] : [],
       ['id', crypto.randomUUID()],
-    ].map(([name, value]) => h(Form.Hidden, { name, value })),
+    ].map(([name, value]) => h(Form.Hidden, { key: name, name, value })),
     ...inner,
   )
 
@@ -471,6 +473,7 @@ export let card = (
   return cloneElement(
     drawn,
     {
+      key: u.eid,
       'data-key': u.eid,
       'data-inbox-card': crypto.randomUUID(),
       'data-inbox-waits': u.needs ? at.space.slug : undefined,
@@ -503,6 +506,56 @@ export type UpdatesView = {
   spaces: Spot[]
   apex: string
   back?: string
+  here?: string
+  filter?: UpdateFilter
+}
+
+/** The address of a list, keeping the space its frame is open in. */
+export let updatesAt = (base: string, { q, archived }: UpdateFilter = {}) =>
+  q
+    ? `${base}${base.includes('?') ? '&' : '?'}${new URLSearchParams({ q })}`
+    : archived
+    ? `${base}${base.includes('?') ? '&' : '?'}dismissed`
+    : base
+
+/** Inbox and archive navigation and one search across both. */
+export let updatesControls = (
+  base: string,
+  { q, archived }: UpdateFilter = {},
+) => {
+  let [action, params] = base.split('?')
+  let tab = (href: string, label: string, on: boolean) =>
+    h(Tabs.Tab, {
+      as: 'a',
+      href,
+      mod: on && 'on',
+      'aria-current': on ? 'page' : undefined,
+    }, label)
+  return h(
+    Fragment,
+    null,
+    h(
+      Tabs,
+      { as: 'nav', 'aria-label': 'Updates views' },
+      tab(base, 'Inbox', !q && !archived),
+      tab(updatesAt(base, { archived: true }), 'Archived', !!archived),
+    ),
+    h(
+      Form.Line,
+      { as: 'form', action, method: 'get', role: 'search' },
+      [...new URLSearchParams(params)].map(([name, value]) =>
+        h(Form.Hidden, { key: name, name, value })
+      ),
+      h(Field, {
+        type: 'search',
+        name: 'q',
+        defaultValue: q ?? '',
+        placeholder: 'Search updates',
+        'aria-label': 'Search updates',
+      }),
+      h(Button, { type: 'submit' }, 'Search'),
+    ),
+  )
 }
 
 /** An update, and the space it came from. */
@@ -539,11 +592,27 @@ export let cardsView = (
   updates.length
     ? updates.map((u) =>
       card(
-        { space: u.space, apex: view.apex, back: view.back },
-        u,
+        {
+          space: u.space,
+          apex: view.apex,
+          back: view.here ?? view.back,
+          history: !!view.filter,
+        },
+        u.dismissed ? { ...u, unread: false } : u,
         apps(u.space),
-        view.back ? whereFrom(u.space) : null,
+        h(
+          Fragment,
+          null,
+          view.back ? whereFrom(u.space) : null,
+          view.filter?.q && u.dismissed ? h(State, null, 'Archived') : null,
+        ),
       )
+    )
+    : view.filter
+    ? h(
+      Empty.Title,
+      null,
+      view.filter.q ? 'No matching updates' : 'Nothing archived',
     )
     : h(
       'div',

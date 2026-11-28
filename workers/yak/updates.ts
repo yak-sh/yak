@@ -27,15 +27,21 @@ import type { Update } from './operator-updates.ts'
 import {
   type Apps,
   bySha,
-  card,
   cardsView,
   chatAt,
   draftAt,
   type Spot,
   spotOf,
+  updatesControls,
   type UpdatesView,
 } from '@yaks/platform/updates-view'
-import { newsOrder, offerRows, updateRows } from '@yaks/platform/update-rows'
+import {
+  matchesUpdate,
+  newsOrder,
+  offerRows,
+  type UpdateFilter,
+  updateRows,
+} from '@yaks/platform/update-rows'
 import { appRows } from '@yaks/platform/side-rows'
 import type { MarkedApp } from '@yaks/platform/routes'
 import { drawnRows } from '@yaks/platform/page-graph'
@@ -85,9 +91,7 @@ export type Read = Updates & {
 /** A space whose Operator did not answer, and how it failed. */
 export type Missed = { space: Space; error: unknown }
 
-/** What reading Updates asks of each space: what they read now marked read
- * (`seen`), or the notices they dismissed (`dismissed`). */
-type Asking = { seen?: boolean; dismissed?: boolean; dir?: Directory }
+type Asking = { seen?: boolean; filter?: UpdateFilter; dir?: Directory }
 
 /** A person's Updates across the spaces they stand in: @yaks/inbox read in
  * each space's Operator store (operator-updates.ts), as one list, what needs
@@ -98,12 +102,13 @@ type Asking = { seen?: boolean; dismissed?: boolean; dir?: Directory }
 export let updatesAcross = async (
   env: Env,
   seats: Seat[],
-  { seen = false, dismissed = false, dir }: Asking = {},
+  { seen = false, filter = {}, dir }: Asking = {},
 ): Promise<
   Updates & { by: Map<string, number>; missed: Missed[]; read: Read[] }
 > => {
-  let args = dismissed ? { dismissed } : seen ? { seen } : {}
-  let index = dismissed
+  let { q, archived } = filter
+  let args = q || archived ? filter : seen ? { seen } : {}
+  let index = archived
     ? undefined
     : dir ?? directory(bound(env.DIRECTORY, fetch, env))
   let missed: Missed[] = []
@@ -113,7 +118,7 @@ export let updatesAcross = async (
         operatorDoor(env, space, who, 'updates', args) as Promise<
           { updates: Update[]; waiting: number }
         >,
-        index ? offersIn(index, space, who, seen) : [],
+        index ? offersIn(index, space, who, seen && !q, q) : [],
       ])
       return {
         space,
@@ -154,26 +159,17 @@ export let updatesOf = async (
   return { updates, waiting, read }
 }
 
-/** The notices a person dismissed in a space, newest first. */
-export let dismissedOf = async (
-  env: Env,
-  space: Space,
-  who: Who,
-): Promise<Updates> => {
-  let { updates, waiting, missed } = await updatesAcross(env, [{
-    space,
-    who,
-  }], { dismissed: true })
-  if (missed.length) throw missed[0].error
-  return { updates, waiting }
-}
-
 // What the directory holds for a person beside their Operator's
 // Updates: apps offered to the space, friend requests and suggestions, and
 // messages from friends, which reading (`seen`) marks read.
-let requestsOf = async (dir: Directory, space: Space, who: Who) =>
+let requestsOf = async (
+  dir: Directory,
+  space: Space,
+  who: Who,
+  history = false,
+) =>
   (await Promise.all([
-    transferUpdates(dir, space, who),
+    transferUpdates(dir, space, who, history),
     friendUpdates(dir, space, who),
   ])).flat()
 
@@ -204,33 +200,12 @@ export let offersIn = async (
   space: Space,
   who: Who,
   seen = false,
+  q?: string,
 ) =>
   (await Promise.all([
-    requestsOf(dir, space, who),
-    messageUpdates(dir, space, who, seen),
-  ])).flat()
-
-/** The notices a person dismissed, newest first, and the way back to the
- * rest. */
-export let dismissedUpdates = (
-  env: Env,
-  space: Space,
-  { updates }: { updates: Update[]; waiting: number },
-  apps: Apps = [],
-) =>
-  h(
-    Fragment,
-    null,
-    h(
-      'p',
-      { className: 'Note Update_About' },
-      'What you dismissed. Each comes back to your Updates when something new happens on it. ',
-      h('a', { href: talkPath('updates', space.slug) }, 'Back to Updates'),
-    ),
-    updates.length
-      ? updates.map((u) => card({ space, apex: apex(env) }, u, apps))
-      : h('p', { className: 'Update_Meta' }, 'Nothing dismissed.'),
-  )
+    requestsOf(dir, space, who, !!q),
+    messageUpdates(dir, space, who, seen, !!q),
+  ])).flat().filter((u) => !q || matchesUpdate(q, u))
 
 /** How long the Updates page waits on the last day's visits before it is
  * drawn without them: they are a curiosity, never worth a slow page. */
@@ -259,6 +234,24 @@ export let visitsOf = async (
   }
 }
 
+/** A snapshot of the archive or search results. Actions return here so the
+ * list is read again after a write. */
+export let historyCards = (
+  env: Env,
+  { updates }: Updates,
+  apps: (space: Spot) => Apps,
+  view: Pick<UpdatesView, 'back' | 'here' | 'filter'>,
+) =>
+  h(
+    'div',
+    { className: 'Update_List' },
+    cardsView(
+      { person: '', spaces: [], apex: apex(env), ...view },
+      updates,
+      apps,
+    ),
+  )
+
 /** What the Updates page shows under its bar: the day, then what waits on
  * the person, the rows of their servers' `lists` that wait before the
  * Updates that need them, then what happened. */
@@ -282,6 +275,7 @@ export let updates = (
   h(
     Fragment,
     null,
+    updatesControls(talkPath('updates', space.slug)),
     about(space),
     daySlot({ person, space: space.eid, friends }),
     lists,
@@ -289,7 +283,6 @@ export let updates = (
       apps, {
       drawn: news != null,
     }),
-    dismissedLink(space),
   )
 
 let about = (space: Space) =>
@@ -297,17 +290,6 @@ let about = (space: Space) =>
     'p',
     { className: 'Note Update_About' },
     `${space.operator} writes here when something happens in your apps, and asks here when something needs you. Ask about any of it, and the chat opens.`,
-  )
-
-let dismissedLink = (space: Space) =>
-  h(
-    'p',
-    { className: 'Update_Meta' },
-    h(
-      'a',
-      { href: talkPath('updates', space.slug) + '?dismissed' },
-      'See what you dismissed',
-    ),
   )
 
 /** The person's Updates from every space's Operator, at `/updates`. */
@@ -323,10 +305,16 @@ export let allUpdatesIntro = h(
 /** Every space's Updates as a view on a page opened at another of its views
  * (@yaks/platform/talk-views): the cards of each of `spaces` are drawn in
  * the browser from the tab's page graph as its watches answer. */
-export let allLater = (env: Env, spaces: Spot[], person: string) =>
+export let allLater = (
+  env: Env,
+  spaces: Spot[],
+  person: string,
+  here: string,
+) =>
   h(
     Fragment,
     null,
+    updatesControls(here),
     allUpdatesIntro,
     listed(env, person, spaces, { updates: [], waiting: 0 }, () => [], {
       back: ALL,
@@ -386,6 +374,7 @@ export let allUpdatesCards = (
   apps: Map<string, Apps>,
   missed: Space[] = [],
   person = '',
+  history?: Pick<UpdatesView, 'here' | 'filter'>,
 ) =>
   h(
     Fragment,
@@ -399,14 +388,21 @@ export let allUpdatesCards = (
         } could not be reached just now. Open this page again to try.`,
       )
     ),
-    listed(
-      env,
-      person,
-      news.read.map((r) => r.space),
-      news,
-      (space) => apps.get(space.slug) ?? [],
-      { back: ALL },
-    ),
+    history
+      ? historyCards(
+        env,
+        news,
+        (space) => apps.get(space.slug) ?? [],
+        { back: ALL, ...history },
+      )
+      : listed(
+        env,
+        person,
+        news.read.map((r) => r.space),
+        news,
+        (space) => apps.get(space.slug) ?? [],
+        { back: ALL },
+      ),
   )
 
 /** Commit the action where the card came from and return its receipt. */

@@ -44,7 +44,7 @@ let call = (name: string, args: unknown): Item[] => [{
   args: JSON.stringify(args),
 }]
 let said = (text: string): Item[] => [{ kind: 'assistant', text }]
-let script: Item[][] = [
+let script: (Item[] | (() => Promise<Item[]>))[] = [
   call('decision_new', {
     question: 'Text reminders for Book club?',
     choices: [
@@ -63,19 +63,20 @@ let failing = false
 let service = operatorService(
   p.env,
   { person: ada, role: 'owner', space: eid },
-  operatorModel((req) => {
+  operatorModel(async (req) => {
     asked.push(JSON.stringify(req.items))
     tooled.push(callable(req))
     if (failing) {
       failing = false
       return Promise.reject(new Error('provider: 529 overloaded'))
     }
-    return Promise.resolve({
+    let next = script.shift() ?? said('Done.')
+    return {
       id: crypto.randomUUID(),
       model: req.model,
-      items: script.shift() ?? said('Done.'),
+      items: typeof next == 'function' ? await next() : next,
       cost: 0.001,
-    })
+    }
   }),
 )
 p.env.BUILDER = service.binding
@@ -465,7 +466,8 @@ let cards = async (dismissed = false) => {
   let space = (await directoryOf(p.env.STORE).at(eid))!
   let who = { person: ada, role: 'owner' as const, space: eid }
   let d = parseHTML(
-    await (await updatesPage(p.env, space, who, {}, dismissed)).text(),
+    await (await updatesPage(p.env, space, who, {}, { archived: dismissed }))
+      .text(),
   ).document
   return [...d.querySelectorAll('.Update:not(.Update-needs)')].map((c) => ({
     subject: c.querySelector('.Update_Subject')?.textContent,
@@ -598,6 +600,12 @@ test('a dismissed notice leaves the page and its count, shows under what was dis
   assertEquals(put.updates.map((u) => [u.eid, u.dismissed]), [
     [notice.eid, true],
   ])
+  let [kept] = await store.g.get([notice.eid])
+  let [attention] = await store.g.read(
+    line`.subscription.actor=${ada}&.subscription.target=${notice.eid}&.archived&*`,
+  )
+  assertEquals((kept.doc as Comp).body, notice.words)
+  assertEquals((attention.archived as Comp).by, ada)
   assertEquals((await cards(true)).map((c) => [c.subject, c.dismiss]), [
     ['Recipes: printing works again', false],
   ])
@@ -615,6 +623,32 @@ test('a dismissed notice leaves the page and its count, shows under what was dis
   await assertRejects(
     () => updating(store, as(bo), { dismiss: notice.eid }),
     'not in your Updates',
+  )
+})
+
+test('search finds older notices in either list beyond the inbox’s display limit', async () => {
+  let old = notification({ to: bo, words: 'Mapping the old footpath' })
+  let put = notification({ to: bo, words: 'Repairing the old footpath' })
+  let newer = Array.from(
+    { length: 50 },
+    (_, i) => notification({ to: bo, words: `Newer notice ${i}` }),
+  )
+  await store.g.apply([old, put], {
+    now: '2025-01-01T00:00:00.000Z',
+    trusted: true,
+  })
+  await updating(store, as(bo), { dismiss: put.entity.eid })
+  await store.g.apply(newer, { now: '2025-01-02T00:00:00.000Z', trusted: true })
+  assertEquals(
+    (await read(bo)).updates.some((u) => u.eid == old.entity.eid),
+    false,
+  )
+  let found = await updating(store, as(bo), { q: 'old footpath' }) as {
+    updates: Update[]
+  }
+  assertEquals(
+    Object.fromEntries(found.updates.map((u) => [u.eid, u.dismissed])),
+    { [old.entity.eid]: false, [put.entity.eid]: true },
   )
 })
 
@@ -690,6 +724,40 @@ test('a turn the person left before it ended is in their Updates with its answer
   let after = await said_('Here is the picnic plan.')
   assertEquals(after.map((u) => u.unread), [false])
   await where('here')
+})
+
+test('a newer answer to the same turn brings its archived Update back unread', async () => {
+  let early = 'I am looking up the train times.'
+  let later = 'The last train leaves at eight.'
+  let archived: string | undefined
+  await where('away')
+  try {
+    script.push(
+      call('fork', { prompt: 'Look up the last train' }),
+      said(early),
+      said('Eight o’clock.'),
+      async () => {
+        archived = (await read(ada)).updates.find((u) => u.words == early)?.eid
+        if (archived) await updating(store, as(ada), { dismiss: archived })
+        return said(later)
+      },
+    )
+    await receive(
+      store,
+      { space: eid, person: ada, channel: 'chat' },
+      'When is the last train?',
+    )
+    await service.drain()
+    assertEquals(!!archived, true)
+    let back = (await read(ada)).updates.find((u) => u.eid == archived)
+    assertEquals([back?.words, back?.unread, back?.dismissed], [
+      later,
+      true,
+      false,
+    ])
+  } finally {
+    await where('here')
+  }
 })
 
 test('dismissing from every space’s Updates comes back there, and never off yaks.app', async () => {
@@ -771,12 +839,15 @@ test('every Operator page holds the chat, its Updates, every space’s and its D
     ],
   )
   // A page that is none of them holds them too.
-  assertEquals(await views(updatesPage(p.env, space, who, beside, true)), [
-    ['/club/updates?dismissed', 'shown', 'news'],
-    ['/club/updates', 'hidden', 'news'],
-    ['/updates?in=club', 'hidden', 'news'],
-    ['/club', 'hidden', 'dashboard'],
-  ])
+  assertEquals(
+    await views(updatesPage(p.env, space, who, beside, { archived: true })),
+    [
+      ['/club/updates?dismissed', 'shown', 'news'],
+      ['/club/updates', 'hidden', 'news'],
+      ['/updates?in=club', 'hidden', 'news'],
+      ['/club', 'hidden', 'dashboard'],
+    ],
+  )
   // Every space's cards are drawn in the browser, from each one the side
   // offers.
   let all = (await page(chatPage(p.env, space, who, 'new', beside))).find(

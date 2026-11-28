@@ -23,7 +23,13 @@ import { readInbox } from '@yaks/inbox/read'
 import type { Thread } from '@yaks/inbox'
 import { markAttention } from '@yaks/notify/attention'
 import { type Choice, showing, shown as shownBy } from '@yaks/task'
-import type { Place, Shown, Update } from '@yaks/platform/update-rows'
+import {
+  matchesUpdate,
+  type Place,
+  type Shown,
+  type Update,
+  type UpdateFilter,
+} from '@yaks/platform/update-rows'
 
 export type { Place, Shown, Update }
 import { refuse } from './tool.ts'
@@ -80,6 +86,15 @@ export let notification = (
     : {},
 })
 
+let wordsOf = (row: Bundle | undefined) => {
+  let decision = comp(row, 'decision')
+  let doc = comp(row, 'doc')
+  return {
+    words: String(decision ? decision.question : doc?.body ?? ''),
+    ...!decision && doc?.title ? { subject: String(doc.title) } : {},
+  }
+}
+
 let updateOf = (
   t: Thread,
   row: Bundle | undefined,
@@ -88,15 +103,13 @@ let updateOf = (
 ): Update => {
   let decision = comp(row, 'decision')
   let note = comp(row, 'notification')
-  let doc = comp(row, 'doc')
   return {
     eid: t.eid,
     needs: t.lane == 'Needs you',
     at: t.at,
     unread: t.unread,
     dismissed: t.archived,
-    words: String(decision ? decision.question : doc?.body ?? ''),
-    ...!decision && doc?.title ? { subject: String(doc.title) } : {},
+    ...wordsOf(row),
     ...note?.about ? { about: String(note.about) } : {},
     ...from ? { from } : {},
     ...decision
@@ -355,17 +368,17 @@ let lapsed = (row: Bundle | undefined, now: number) => {
 
 /** A person's Updates in a space, newest first with what needs them ahead,
  * at most `most` of them, and how many wait on them: what needs them, and
- * what they have not read. `dismissed` reads the notices they dismissed
- * instead, which wait on nobody. */
+ * what they have not read. A history read applies its filter before
+ * selecting any cards to draw. */
 export let updatesOf = async (
   store: Store,
   person: string,
   space: string,
   most = MOST,
-  dismissed = false,
+  filter: UpdateFilter = {},
   now = Date.now(),
 ): Promise<{ updates: Update[]; waiting: number; expires: number }> => {
-  let { kept, abouts } = await keptOf(store, person, space, dismissed, now)
+  let { kept, abouts } = await keptOf(store, person, space, filter, now)
   let shown = kept.slice(0, most)
   let held = shown.map((s) => s.row)
   let [shows, places] = await Promise.all([
@@ -378,30 +391,33 @@ export let updatesOf = async (
     updates: shown.map(({ t, row }, i) =>
       updateOf(t, row, shows.get(t.eid), places[i])
     ),
-    waiting: dismissed ? 0 : waitingIn(kept),
+    waiting: waitingIn(kept),
     expires: expiresIn(kept),
   }
 }
 
 // The person's Updates as their page lists them, newest first with what
-// needs them ahead, and what each tells of: every thread but a run's report,
-// an approval that lapsed, and those dismissed or not (`dismissed`).
+// needs them ahead, and what each tells of. Reports and lapsed approvals
+// stay out of Updates, including the archive and search.
 let keptOf = async (
   store: Store,
   person: string,
   space: string,
-  dismissed: boolean,
+  { archived = false, q }: UpdateFilter,
   now: number,
 ) => {
-  let threads = await threadsOf(store, person, space, dismissed)
+  let threads = (await threadsOf(store, person, space, archived || !!q))
+    .filter((t) => q || t.archived == archived)
   let rows = await store.g.get(threads.map((t) => t.eid))
-  let abouts = await aboutsOf(store, rows)
-  let reports = await reportsOf(store, rows, abouts)
-  let kept = threads.flatMap((t, i) =>
-    reports.has(t.eid) || t.archived != dismissed || lapsed(rows[i], now)
+  let matching = threads.flatMap((t, i) =>
+    lapsed(rows[i], now) || q && !matchesUpdate(q, wordsOf(rows[i]))
       ? []
       : [{ t, row: rows[i] }]
   )
+  let held = matching.map(({ row }) => row)
+  let abouts = await aboutsOf(store, held)
+  let reports = await reportsOf(store, held, abouts)
+  let kept = matching.filter(({ t }) => !reports.has(t.eid))
   kept.sort((a, b) =>
     +(b.t.lane == 'Needs you') - +(a.t.lane == 'Needs you') ||
     b.t.at.localeCompare(a.t.at)
@@ -412,7 +428,8 @@ let keptOf = async (
 // How many wait on the person: what needs them, and what they have not read.
 // The one count every badge of their Updates says.
 let waitingIn = (kept: { t: Thread }[]) =>
-  kept.filter(({ t }) => t.unread || t.lane == 'Needs you').length
+  kept.filter(({ t }) => !t.archived && (t.unread || t.lane == 'Needs you'))
+    .length
 
 /** The updates counted by the installed icon, and the newest unread alert
  * that a Safari dismissal can re-show. */
@@ -421,7 +438,7 @@ export let alertUpdatesOf = async (
   person: string,
   space: string,
 ) => {
-  let { kept } = await keptOf(store, person, space, false, Date.now())
+  let { kept } = await keptOf(store, person, space, {}, Date.now())
   let waiting = kept.filter(({ t, row }) =>
     t.unread && !!row?.delivered &&
     (comp(row, 'delivered')?.channel ?? 'push') == 'push' &&
@@ -453,7 +470,7 @@ export let waitingUntil = async (
   space: string,
   now: number,
 ) => {
-  let { kept } = await keptOf(store, person, space, false, now)
+  let { kept } = await keptOf(store, person, space, {}, now)
   return { count: waitingIn(kept), expires: expiresIn(kept) }
 }
 
@@ -503,7 +520,7 @@ export let updateCounts = async (
   root: string,
   chat?: string,
 ): Promise<UpdateCounts> => {
-  let { kept, abouts } = await keptOf(store, person, space, false, Date.now())
+  let { kept, abouts } = await keptOf(store, person, space, {}, Date.now())
   let shown = kept.slice(0, MOST)
   let waiting = waitingIn(kept)
   let needs = shown.filter(({ t }) => t.lane == 'Needs you').length
@@ -602,7 +619,14 @@ export let updating = async (
     return { dismissed: found.eid }
   }
   if (args.dismissed === true) {
-    return await updatesOf(store, person, space, 50, true)
+    return await updatesOf(store, person, space, 50, { archived: true })
+  }
+  let q = str('q').trim()
+  if (q || args.archived === true) {
+    return await updatesOf(store, person, space, Infinity, {
+      q: q || undefined,
+      archived: args.archived === true,
+    })
   }
   if (Array.isArray(args.handled)) {
     let asked = args.handled.filter((e): e is string => typeof e == 'string')

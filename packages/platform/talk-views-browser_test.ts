@@ -52,6 +52,9 @@ ${
 <section ${VIEW}="${
     view('/club/updates', 'Updates')
   }" hidden><p>news</p></section>
+<section ${VIEW}="${
+    view('/club/updates?dismissed', 'Updates', { snapshot: true })
+  }" hidden><p>old archive</p></section>
 </div><aside id="aside"></aside>
 ${
     appLinks
@@ -105,6 +108,12 @@ test('a press on another view of the page shows it in place, named, lit, and its
   press(doc, '/club')
   equal(shown(doc).view, ['chat'])
   equal(shown(doc).aside, true)
+})
+
+test('reopening an Updates archive lets navigation fetch it again', () => {
+  let doc = page()
+  equal(press(doc, '/club/updates?dismissed'), false)
+  equal(shown(doc).view, ['chat'])
 })
 
 test('each view keeps where it was scrolled', () => {

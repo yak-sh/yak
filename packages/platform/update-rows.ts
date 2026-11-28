@@ -64,6 +64,22 @@ export type Update = {
   shown?: Shown[]
 }
 
+/** Search spans the inbox and archive. Without a query, show one of them. */
+export type UpdateFilter = { q?: string; archived?: boolean }
+
+export let updateFilter = (params: URLSearchParams): UpdateFilter => {
+  let q = params.get('q')?.trim()
+  return q ? { q } : params.has('dismissed') ? { archived: true } : {}
+}
+
+export let matchesUpdate = (
+  q: string,
+  { subject, words }: Pick<Update, 'subject' | 'words'>,
+): boolean => {
+  let text = `${subject ?? ''}\n${words}`.toLowerCase()
+  return q.toLowerCase().split(/\s+/).every((word) => text.includes(word))
+}
+
 /** Where an update's card is on its page, for a link to it. */
 export let updateAnchor = (eid: string): string => `u-${eid}`
 

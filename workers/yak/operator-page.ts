@@ -144,8 +144,7 @@ import {
   allUpdatesCards,
   allUpdatesIntro,
   type Apps,
-  dismissedOf,
-  dismissedUpdates,
+  historyCards,
   type Seat,
   type Updates,
   updates,
@@ -187,7 +186,12 @@ import {
   VIEW_ATTR as DASHBOARD,
 } from '@yaks/platform/dashboard-view'
 import { spaceApps } from '@yaks/platform/space-apps'
-import { offerRows, updateRows } from '@yaks/platform/update-rows'
+import {
+  offerRows,
+  type UpdateFilter,
+  updateRows,
+} from '@yaks/platform/update-rows'
+import { updatesAt, updatesControls } from '@yaks/platform/updates-view'
 import { keyed } from './platform-keys.ts'
 
 // What this page draws, as markup: the edge where its parts become text.
@@ -1364,6 +1368,7 @@ type TalkPage = {
   current: string[]
   // this page's address, where the side's fold draws it again
   here: string
+  snapshot?: boolean
   // a chat's address without the app open beside it, which its view stands
   // for (`viewOf`)
   chat?: string
@@ -1522,7 +1527,7 @@ let viewOf = (space: Space, page: TalkPage, aside: boolean): TalkView => {
   return {
     here: page.chat ?? page.here,
     link: all
-      ? page.here
+      ? allAt(space)
       : page.current.includes('updates')
       ? talkPath('updates', space.slug)
       : page.current.includes('dashboard')
@@ -1534,6 +1539,7 @@ let viewOf = (space: Space, page: TalkPage, aside: boolean): TalkView => {
     skip: page.skip,
     aside,
     all,
+    ...page.snapshot ? { snapshot: true } : {},
     marks: page.back ? ['Talk-zoomed'] : [],
   }
 }
@@ -2094,44 +2100,48 @@ let updateColumn = (space: Space, who: Who) => ({
   'data-inbox-home': space.slug,
 })
 
-/** Updates from the Operator (updates.ts), beside the chat app's side, or
- * with `dismissed` the notices the person dismissed. `opened` says the
- * person opened them, rather than the page being fetched ahead. */
+/** Updates from the Operator (updates.ts), beside the chat app's side.
+ * Opening the inbox reads it. Looking through history leaves it unread. */
 export let updatesPage = async (
   env: Env,
   space: Space,
   who: Who,
   side: Beside | Promise<Beside> = {},
-  dismissed = false,
+  filter: UpdateFilter = {},
   opened = true,
   c: Clock = clock(),
   dir?: Directory,
 ) => {
   // Opening the visible Updates reads them. The other view and the day's
   // cards fetch through their usual browser doors when shown.
-  let [news, put, beside] = await Promise.all([
-    updatesOf(env, space, who, opened && !dismissed, dir),
-    dismissed ? dismissedOf(env, space, who) : undefined,
+  let base = talkPath('updates', space.slug)
+  let here = updatesAt(base, filter)
+  let history = !!(filter.q || filter.archived)
+  let [news, found, beside] = await Promise.all([
+    updatesOf(env, space, who, opened && !history, dir),
+    history ? updatesAcross(env, [{ space, who }], { filter, dir }) : undefined,
     side,
   ])
-  if (put) {
+  if (found) {
+    if (found.missed.length) throw found.missed[0].error
     return c.measure('render', () =>
       talkPage(env, space, who, beside, {
-        title: `Dismissed updates from ${space.operator}`,
+        title: 'Updates',
         status: 200,
         waiting: news.updates.filter((u) => u.needs).length,
         listed: null,
         current: ['updates'],
-        here: talkPath('updates', space.slug) + '?dismissed',
+        here,
+        snapshot: true,
         skip: ['#content', 'Skip to content'],
         main: h(
           'div',
           updateColumn(space, who),
-          dismissedUpdates(env, space, put, beside.apps),
+          updatesControls(base, filter),
+          historyCards(env, found, () => beside.apps ?? [], { here, filter }),
         ),
       }))
   }
-  let here = talkPath('updates', space.slug)
   let chat = openingParts(env, space, who, 'new', beside)
   return c.measure('render', () =>
     talkPage(env, space, who, beside, {
@@ -2227,6 +2237,7 @@ let allBeside = (
           operator: operator ?? space.operator,
         })),
         who.person ?? '',
+        here,
       ),
     ),
   }
@@ -2247,16 +2258,26 @@ export let allUpdatesPage = async (
   opened = true,
   c: Clock = clock(),
   dir?: Directory,
+  filter: UpdateFilter = {},
 ) => {
   let { space, who } = home
+  let base = allAt(space)
+  let here = updatesAt(base, filter)
+  let history = filter.q || filter.archived ? { here, filter } : undefined
   let cards = Promise.all([
-    updatesAcross(env, seats, { seen: opened, dir }),
+    updatesAcross(env, seats, { seen: opened, filter, dir }),
+    history
+      ? updatesOf(env, space, who, false, dir).catch((error) => {
+        caught(error, { request: 'all updates inbox count', space: space.slug })
+        return undefined
+      })
+      : undefined,
     apps,
-  ]).then(([news, shelves]) => {
+  ]).then(([news, inbox, shelves]) => {
     for (let { space, error } of news.missed) {
       caught(error, { request: 'all updates', space: space.slug })
     }
-    let waiting = news.updates.filter((u) =>
+    let waiting = (inbox ?? news).updates.filter((u) =>
       u.needs && u.space.eid == space.eid
     )
       .length
@@ -2267,6 +2288,7 @@ export let allUpdatesPage = async (
         shelves,
         news.missed.map((m) => m.space),
         who.person ?? '',
+        history,
       ),
       waiting ? run(addWaiting(String(waiting), true)) : null,
     ])
@@ -2279,7 +2301,6 @@ export let allUpdatesPage = async (
     ))
   })
   let beside = await side
-  let here = allAt(space)
   let chat = openingParts(env, space, who, 'new', beside)
   let slot = h('template', { 'data-update-cards': '' })
   return c.measure('render', () =>
@@ -2295,8 +2316,15 @@ export let allUpdatesPage = async (
         listed: null,
         current: ['all'],
         here,
+        snapshot: !!history,
         skip: ['#content', 'Skip to content'],
-        main: h('div', updateColumn(space, who), allUpdatesIntro, slot),
+        main: h(
+          'div',
+          updateColumn(space, who),
+          updatesControls(base, filter),
+          history ? null : allUpdatesIntro,
+          slot,
+        ),
       },
       [chat],
       { marker: html(slot), contents: cards },

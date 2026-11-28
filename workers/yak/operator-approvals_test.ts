@@ -486,7 +486,7 @@ test('an approval answered on its card or link leaves their Updates; one that la
   let waits = 'Add al@x.com to the space as an editor?'
   equal((await needing()).includes(waits), true)
   equal(
-    (await updatesOf(store, person, place, 50, false, clock + LIFE + 1))
+    (await updatesOf(store, person, place, 50, {}, clock + LIFE + 1))
       .updates.some((u) => u.words == waits),
     false,
   )

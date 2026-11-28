@@ -16,7 +16,7 @@ import {
   presence,
   type Row,
 } from '@yaks/notify/whereabouts'
-import { line } from '@yaks/query'
+import { line, sub } from '@yaks/query'
 import { ordered } from '@yaks/platform/presence'
 import { canon } from './signin.ts'
 import { friendsOf, friendWhereabouts, standingsOf } from './friend-reads.ts'
@@ -374,11 +374,15 @@ let LIMIT = 40
 export let messagesOf = async (
   dir: Directory,
   person: string,
-  limit = LIMIT,
+  limit: number | null = LIMIT,
 ): Promise<Message[]> => {
   let [rows, friends] = await Promise.all([
     dir.read(
-      line`(.knock.target=${person}|.knock.from=${person})&.knock.from&.doc&?play_invite&?opened&?created&.order=-created.at&.limit=${limit}`,
+      line`(.knock.target=${person}|.knock.from=${person})&.knock.from&.doc&?play_invite&?opened&?created&.order=-created.at${
+        sub(
+          limit == null ? line`` : line`&.limit=${limit}`,
+        )
+      }`,
     ),
     friendsOf(dir, person),
   ])
@@ -495,11 +499,12 @@ export let messageUpdates = async (
   space: Space,
   who: Who,
   seen = false,
+  history = false,
 ): Promise<Update[]> => {
   if (!who.person || who.role != 'owner') return []
   let [seats, messages] = await Promise.all([
     dir.seats(who.person, 'owner'),
-    messagesOf(dir, who.person),
+    messagesOf(dir, who.person, history ? null : LIMIT),
   ])
   if (ownOf(seats)?.space.eid != space.eid) return []
   let incoming = messages.filter((m) => !m.outgoing)

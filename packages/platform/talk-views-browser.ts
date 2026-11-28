@@ -174,7 +174,10 @@ export let switching = (doc: Document, bind = canvases(doc)): void => {
     if (app) to.searchParams.delete('app')
     let views = [...doc.querySelectorAll<HTMLElement>(`[${VIEW}]`)]
     let at = viewAt(
-      views.map((el) => ({ here: said(el).here, el })),
+      views.flatMap((el) => {
+        let view = said(el)
+        return view.snapshot ? [] : [{ here: view.here, el }]
+      }),
       to.pathname + to.search,
     )
     let slot = doc.querySelector<HTMLElement>(`[${SLOT}]`)

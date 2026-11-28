@@ -148,17 +148,18 @@ export let offered = (dir: Directory, walk: Walk, person: string) =>
     dir.domainTransfersTo(walk),
   ])
 
-let newest = (rows: Row[]) =>
+let newest = (rows: Row[], history: boolean) =>
   rows.toSorted((a, b) =>
     (b.created?.at ?? '').localeCompare(a.created?.at ?? '')
-  ).slice(0, 40)
+  ).slice(0, history ? undefined : 40)
 
 let appUpdates = async (
   dir: Directory,
   space: Space,
   offers: Row[],
+  history: boolean,
 ): Promise<Update[]> => {
-  let items = newest(offers)
+  let items = newest(offers, history)
   return (await Promise.all(items.map(async (row) => {
     let offer = row.app_transfer!
     let response = row.app_transfer_answer
@@ -198,8 +199,9 @@ let domainUpdates = async (
   dir: Directory,
   space: Space,
   offers: Row[],
+  history: boolean,
 ): Promise<Update[]> => {
-  let rows = newest(offers)
+  let rows = newest(offers, history)
   return (await Promise.all(rows.map(async (row) => {
     let offer = row.domain_transfer!
     let response = row.domain_transfer_answer
@@ -231,6 +233,7 @@ export let transferUpdates = async (
   dir: Directory,
   space: Space,
   who: Who,
+  history = false,
 ) => {
   if (!who.person || who.role != 'owner') return []
   let [apps, domains] = await offered(
@@ -239,8 +242,8 @@ export let transferUpdates = async (
     who.person,
   )
   return (await Promise.all([
-    appUpdates(dir, space, apps as unknown as Row[]),
-    domainUpdates(dir, space, domains),
+    appUpdates(dir, space, apps as unknown as Row[], history),
+    domainUpdates(dir, space, domains, history),
   ])).flat()
 }
 
