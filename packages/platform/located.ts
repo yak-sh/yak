@@ -34,6 +34,7 @@ import { ago } from '@yaks/notify/whereabouts'
 import { dialing } from '@yaks/phone/mobile'
 import { line } from '@yaks/query'
 import type { Tool } from '@yaks/session'
+import { clockItem, timePolicy, timeZone } from './local-time.ts'
 
 /** What put a person somewhere, strongest first. */
 export let SOURCES = ['said', 'billing', 'phone', 'network'] as const
@@ -222,13 +223,15 @@ export type Cf = {
 /// heard({ city: 'Kalamazoo', regionCode: 'MI', country: 'US', timezone: 'America/Detroit' }) -> { city: 'Kalamazoo', region: 'MI', country: 'US', zone: 'America/Detroit' }
 /// heard({ country: 'T1' }) -> {}
 export let heard = (cf: Cf): Area => {
+  let zone = timeZone(cf.timezone)
+  if (!cf.country) return tidy({ zone })
   // Cloudflare's T1 is Tor and XX unknown: no place.
-  if (!cf.country || !CODE.test(cf.country) || cf.country == 'XX') return {}
+  if (!CODE.test(cf.country) || cf.country == 'XX') return {}
   return tidy({
     city: cf.city,
     region: cf.regionCode,
     country: cf.country,
-    zone: cf.timezone,
+    zone,
   })
 }
 
@@ -313,16 +316,27 @@ let readingOf = (b: Bundle): Reading => {
   return tidy(r) as Reading
 }
 
-/** A person's readings: their `located` rows and their phone's. */
-export let readingsOf = async (dir: Dir, person: string) => {
+let browserZoneOf = (row?: Bundle) =>
+  (row?.browser_clock as { zone?: string } | undefined)?.zone
+
+let locationOf = async (dir: Dir, person: string) => {
   let [rows, [me]] = await Promise.all([
     dir.read(line`.located.person=${person}&*`),
-    dir.read(line`.entity.eid=${person}&.fields=entity.eid,phone.number`),
+    dir.read(
+      line`.entity.eid=${person}&.fields=entity.eid,phone.number,browser_clock.zone`,
+    ),
   ])
   let number = (me?.phone as { number?: string } | undefined)?.number
   let phone = number ? dialed(number) : undefined
-  return [...rows.map(readingOf), ...phone ? [phone] : []]
+  return {
+    browser: timeZone(browserZoneOf(me)),
+    readings: [...rows.map(readingOf), ...phone ? [phone] : []],
+  }
 }
+
+/** A person's readings: their `located` rows and their phone's. */
+export let readingsOf = async (dir: Dir, person: string) =>
+  (await locationOf(dir, person)).readings
 
 /** A person's places, as their directory rows say them. */
 export let placesOf = async (dir: Dir, person: string, now = Date.now()) =>
@@ -341,15 +355,68 @@ export let note = async (
   if (next) await dir.apply([next])
 }
 
-/** The line each turn of a person's own Operator is given about where they
- * are, none when nothing places them. */
-export let locatedItem = async (dir: Dir, person: string, now = Date.now()) => {
-  let places = await placesOf(dir, person, now)
-  if (!places.length) return
-  return 'Where the person you are talking with is, roughly, for them alone: ' +
-    'where they are now for "near me", the weather and their time, home or ' +
-    'work for a local number. Never tell it to anyone else; place_set ' +
-    'corrects it when they say otherwise. ' + placesLine(places, now)
+/** Keep the browser clock on the person and the network's place beside it. */
+export let noteConnection = async (
+  dir: Dir,
+  person: string,
+  area: Area,
+  browser?: string,
+): Promise<void> => {
+  let zone = timeZone(browser)
+  let eid = locatedEid(person, 'current', 'network')
+  let [[me], [row]] = await Promise.all([
+    zone
+      ? dir.read(
+        line`.entity.eid=${person}&.person&.fields=entity.eid,browser_clock.zone`,
+      )
+      : [],
+    Object.keys(area).length
+      ? dir.read(line`.entity.eid=${eid}&.located&*`)
+      : [],
+  ])
+  let next = noted(row && readingOf(row), person, {
+    ...area,
+    kind: 'current',
+    source: 'network',
+  })
+  let writes: Bundle[] = next ? [next] : []
+  if (me && zone && browserZoneOf(me) != zone) {
+    writes.push({ entity: { eid: person }, browser_clock: { zone } })
+  }
+  if (writes.length) await dir.apply(writes)
+}
+
+let localZone = (places: Place[], browser?: string) =>
+  browser ?? timeZone(places.find((p) => p.kind == 'current')?.zone?.value)
+
+/** The person's browser zone, or their current place's zone. */
+export let zoneOf = async (
+  dir: Dir,
+  person: string,
+  now = Date.now(),
+): Promise<string | undefined> => {
+  let { browser, readings } = await locationOf(dir, person)
+  return localZone(placed(readings, now), browser)
+}
+
+/** Each turn gets the person's clock and the places they have shared. */
+export let locatedItem = async (
+  dir: Dir,
+  person: string,
+  now = Date.now(),
+): Promise<string> => {
+  let { browser, readings } = await locationOf(dir, person)
+  let places = placed(readings, now)
+  return [
+    clockItem(localZone(places, browser), now),
+    timePolicy,
+    places.length &&
+    'Where the person you are talking with is, roughly, for them alone: ' +
+      'where they are now for "near me" and the weather, home or work for a ' +
+      'local number. Never tell it to anyone else. place_set ' +
+      'corrects their places when they say otherwise. ' +
+      placesLine(places, now),
+  ].filter(Boolean).join('\n')
 }
 
 let str = (description: string) => ({ type: 'string', description })

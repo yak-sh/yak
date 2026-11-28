@@ -74,6 +74,8 @@ export type Event = {
   title: string
   start: string
   end: string
+  startZone?: string
+  endZone?: string
   where?: string
   notes?: string
   attendees?: string[]
@@ -82,17 +84,17 @@ export type Event = {
 
 /** One of Google's events, as an `Event`. */
 export let eventOf = (e: Record<string, unknown>): Event => {
-  let at = (t: unknown) => {
-    let o = (t ?? {}) as Record<string, string>
-    return o.dateTime ?? o.date ?? ''
-  }
+  let start = (e.start ?? {}) as Record<string, string>
+  let end = (e.end ?? {}) as Record<string, string>
   let who = ((e.attendees ?? []) as Record<string, string>[])
     .map((a) => a.email).filter(Boolean)
   return {
     id: String(e.id ?? ''),
     title: String(e.summary ?? '(no title)'),
-    start: at(e.start),
-    end: at(e.end),
+    start: start.dateTime ?? start.date ?? '',
+    end: end.dateTime ?? end.date ?? '',
+    ...start.timeZone ? { startZone: start.timeZone } : {},
+    ...end.timeZone ? { endZone: end.timeZone } : {},
     ...e.location ? { where: String(e.location) } : {},
     ...e.description ? { notes: String(e.description) } : {},
     ...who.length ? { attendees: who } : {},
@@ -428,7 +430,7 @@ let calendarTools = (env: Env, ctx: Sender, connection: Bundle): Tool[] => [{
   readOnly: true,
   step: { doing: 'Reading your calendar…', done: 'Read your calendar' },
   description:
-    "Read the events on the Google Calendar of the person you work for, between two times: what they have on, when they are free. Its answer says the calendar's time zone; say times to them in it.",
+    "Read the events on the Google Calendar of the person you work for, between two times: what they have on, when they are free. Use an event's own time zone for its times, or the calendar's time zone when the event doesn't specify one. Name the zone when it differs from the person's.",
   parameters: {
     type: 'object',
     properties: {
@@ -497,7 +499,7 @@ let calendarTools = (env: Env, ctx: Sender, connection: Bundle): Tool[] => [{
       zone: {
         type: 'string',
         description:
-          "The IANA time zone, such as America/Detroit: the calendar's unless they said another.",
+          "The event's IANA time zone, such as America/Detroit. Use the person's local zone for their own times if they gave no other zone. When zone is omitted for a floating time, Google uses the calendar's zone.",
       },
       where: { type: 'string', description: 'Where it is.' },
       notes: { type: 'string', description: 'Anything to note on it.' },

@@ -13,6 +13,8 @@ import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
 import { handleChannels, receive } from './operator-channels.ts'
+import { connected } from './located.ts'
+import { BROWSER_ZONE } from '@yaks/platform/local-time'
 import type { Ctx } from './tools.ts'
 
 let CEILING = 10_000
@@ -77,6 +79,47 @@ test('the Operator is sent tools it loads with the next ask, and lists the rest'
     names(next).filter((n) => !names(first).includes(n)),
     ['app_files', 'number_find'],
   )
+})
+
+test('a new turn gets the person’s latest browser clock and relevant-zone guidance', async () => {
+  let { env, dir } = platform('operator-local-time')
+  let person = crypto.randomUUID()
+  await dir.stamp({ entities: [{ entity: { eid: person }, person: {} }] })
+  let space = await owned({ dir, person }, 'clock-home')
+  let store = operatorMemory()
+  let turns: Ask[] = []
+  let operator = operating(
+    store,
+    env,
+    operatorModel((req) => {
+      turns.push(req)
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: [{ kind: 'assistant', text: 'Here is the time.' }],
+      })
+    }),
+  )
+  handleChannels(operator, env, { chat: () => Promise.resolve({}) })
+  for (let zone of ['Asia/Kathmandu', 'Pacific/Auckland']) {
+    let req = new Request('https://yaks.app', {
+      headers: { [BROWSER_ZONE]: zone },
+    })
+    await connected(env, person, req)
+    await receive(
+      store,
+      { space, person, channel: 'chat' },
+      'What time is it for me?',
+    )
+    await drain(store)
+    let context = turns.at(-1)?.turnContext?.flatMap((item) =>
+      item.kind == 'instruction' && item.text.includes('current local time')
+        ? [item.text]
+        : []
+    ).join('\n') ?? ''
+    ok(context.includes(`(${zone})`))
+    ok(context.includes('For an event or place with its own time zone'))
+  }
 })
 
 test('the first private reply asks once, and the name they give follows them', async () => {

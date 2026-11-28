@@ -315,6 +315,21 @@
         }
       }
     },
+    "browser_clock": {
+      "$id": "urn:uuid:f78f3382-0f17-49da-bb35-ebd1dff37812",
+      "description": "The time zone reported by the person's browser when they write to their Operator. Worn by the person and read by their own Operator.",
+      "component": true,
+      "type": "object",
+      "journal": false,
+      "properties": {
+        "zone": {
+          "$id": "urn:uuid:a617eac4-6668-4bc1-af3c-bb35f169cb59",
+          "type": "string",
+          "stamped": true,
+          "description": "The browser's IANA time zone, such as America/Detroit."
+        }
+      }
+    },
     "located": {
       "$id": "urn:uuid:e6961871-5378-4506-8118-e229d87ad1b9",
       "description": "Where one source puts one of a person's places, roughly: home, work, current (where they are now) or a place they named, as their own words (said), their billing address (billing) or their connection (network) put it. One row per person, place and source; never a street address or coordinates. Their phone's area code is read off their `phone{number}`, never kept here. Read only by the person and their own Operator.",

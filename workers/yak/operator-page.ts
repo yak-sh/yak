@@ -24,7 +24,7 @@ import {
 } from './directory.ts'
 import { chatRows } from './connections.ts'
 import { reachOf } from './operator-reach.ts'
-import { background, caught } from './defects.ts'
+import { caught } from './defects.ts'
 import { reached } from './lib/hops.ts'
 import {
   builderOf,
@@ -42,6 +42,7 @@ import { type Ways, Ways as Reaching } from './operator-ways.ts'
 import { frame, FRAMED } from './frame.ts'
 import { apex, spaceHost, url } from '@yaks/platform/host'
 import { earlyDraftScript } from '@yaks/platform/operator-early-draft'
+import { BROWSER_ZONE } from '@yaks/platform/local-time'
 import {
   backTo,
   chatPath,
@@ -488,7 +489,7 @@ form?.addEventListener('submit', async (e) => {
   said.textContent = 'Sending…'
   form.hidden = true, sent.hidden = false
   try {
-    let response = await fetch(form.action, { method: 'POST', body, headers: { accept: 'application/json' }, signal })
+    let response = await fetch(form.action, { method: 'POST', body, headers: { accept: 'application/json', '${BROWSER_ZONE}': Intl.DateTimeFormat().resolvedOptions().timeZone }, signal })
     let answer = await response.json().catch(() => null)
     if (!response.ok) throw new Error((answer?.error?.message ?? answer?.message ?? 'Your note was not sent.') + ' Your words are kept; send them again.')
     said.textContent = 'Sent.'
@@ -807,16 +808,13 @@ export let operatorAnswer = async (
     )
   }
   if (req.method == 'POST') {
-    // Where their connection places them now, for their own Operator
-    // (located.ts), noted beside the answer, never before it.
-    if (who.person) {
-      let person = who.person
-      background(
-        import('./located.ts').then(({ connected }) =>
-          connected(env, person, req)
-        ).catch((e) => caught(e, { request: 'operator located' })),
-      )
-    }
+    // Keep the browser clock while reading the message so even its first
+    // turn can use it. A directory fault leaves the message sendable.
+    let person = who.person
+    let location = person &&
+      import('./located.ts').then(({ connected }) =>
+        connected(env, person, req)
+      ).catch((e) => caught(e, { request: 'operator located' }))
     let form = new FormData()
     let files = []
     for await (let part of parts(req)) {
@@ -864,6 +862,7 @@ export let operatorAnswer = async (
       url,
     )
     // Whichever page it is sent from, it goes to the person's conversation.
+    await location
     let received = await operatorDoor(env, space, who, 'receive', {
       say: String(form.get('say') ?? ''),
       request: {
@@ -2628,7 +2627,10 @@ let draftClient = {
     }
     let sent = submission; submission = undefined
     sent.set('draft', JSON.stringify(bundles))
-    let response = await fetch('${at}', { method: 'POST', body: sent })
+    let response = await fetch('${at}', {
+      method: 'POST', body: sent,
+      headers: { '${BROWSER_ZONE}': Intl.DateTimeFormat().resolvedOptions().timeZone },
+    })
     if (!response.ok) {
       let answer = await response.json().catch(() => null)
       let refused = answer?.error?.message ?? answer?.message

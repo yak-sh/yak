@@ -1,10 +1,11 @@
-import { equal, test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import {
   type Dir,
   locatedItem,
   type Near,
   near,
+  noteConnection,
   noted,
   placed,
   placeSet,
@@ -170,22 +171,21 @@ test('a connection saying the same within the day writes nothing', () => {
 
 // A directory holding one person's rows, answering the reads located.ts makes.
 let directory = (phone?: string) => {
-  let rows = new Map<string, Bundle>()
+  let rows = new Map<string, Bundle>([['ada', {
+    entity: { eid: 'ada' },
+    person: {},
+    ...phone ? { phone: { number: phone } } : {},
+  }]])
   let dir: Dir = {
     read: (q) => {
       let eid = /\.entity\.eid=([^&]+)/.exec(decodeURIComponent(q))?.[1]
-      if (q.includes('phone.number')) {
-        return phone
-          ? [{ entity: { eid: 'ada' }, phone: { number: phone } }]
-          : []
-      }
       if (eid) return rows.has(eid) ? [rows.get(eid)!] : []
-      return [...rows.values()]
+      return [...rows.values()].filter((row) => row.located)
     },
     apply: (bundles) => {
       for (let b of bundles) {
         if (b.$delete) rows.delete(b.entity.eid)
-        else rows.set(b.entity.eid, b)
+        else rows.set(b.entity.eid, { ...rows.get(b.entity.eid), ...b })
       }
     },
   }
@@ -196,11 +196,11 @@ test('their correction wins, and the Operator is told where they are', async () 
   let dir = directory('+12695550142')
   let set = placeSet(() => dir, 'ada')
   equal(
-    await locatedItem(dir, 'ada', now),
+    (await locatedItem(dir, 'ada', now)).split('\n').at(-1),
     'Where the person you are talking with is, roughly, for them alone: ' +
-      'where they are now for "near me", the weather and their time, home or ' +
-      'work for a local number. Never tell it to anyone else; place_set ' +
-      'corrects it when they say otherwise. home: US, area code 269 (their phone)',
+      'where they are now for "near me" and the weather, home or work for a ' +
+      'local number. Never tell it to anyone else. place_set ' +
+      'corrects their places when they say otherwise. home: US, area code 269 (their phone)',
   )
   equal(
     await set.run({
@@ -215,5 +215,29 @@ test('their correction wins, and the Operator is told where they are', async () 
     await set.run({ kind: 'home', forget: true }),
     'home: US, area code 269 (their phone)',
   )
-  equal(await locatedItem(directory(), 'ada', now), undefined)
+})
+
+test('their browser sets the clock, their connection still supplies the place', async () => {
+  let dir = directory()
+  let area = {
+    city: 'Chicago',
+    region: 'IL',
+    country: 'US',
+    zone: 'America/Chicago',
+  }
+  let clock = async (at = now) =>
+    (await locatedItem(dir, 'ada', at)).split('\n')[0]
+  ok((await clock()).includes('local time zone is unknown'))
+  await noteConnection(dir, 'ada', area, 'bad zone')
+  ok((await clock()).includes('6:00 AM GMT-06:00 (America/Chicago)'))
+  await noteConnection(dir, 'ada', area, 'Asia/Kathmandu')
+  ok((await clock()).includes('5:45 PM GMT+05:45 (Asia/Kathmandu)'))
+  await noteConnection(dir, 'ada', area)
+  ok((await clock()).includes('5:45 PM GMT+05:45 (Asia/Kathmandu)'))
+  await noteConnection(dir, 'ada', area, 'America/Detroit')
+  ok((await clock()).includes('7:00 AM GMT-05:00 (America/Detroit)'))
+  ok((await clock(Date.parse('2026-07-23T12:00:00Z'))).includes(
+    '8:00 AM GMT-04:00 (America/Detroit)',
+  ))
+  ok((await locatedItem(dir, 'ada', now)).includes('current: Chicago, IL, US'))
 })

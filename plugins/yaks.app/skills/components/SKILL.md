@@ -842,10 +842,10 @@ The complete list of reserved names:
     app_friends app_icon app_icon_draw app_permission app_splash
     app_splash_draw app_transfer app_transfer_answer approving archetype
     archived arrived artifact ask asks attachment attempt attribute_writes
-    authorship belief binding blob bounced browser browser_session budget
-    build build_of builder builder_answer builder_dep builder_edit
-    builder_model_answer builder_open builder_ring built byline call
-    call_ready call_woken called calls cancel cancelled chat_account
+    authorship belief binding blob bounced browser browser_clock
+    browser_session budget build build_of builder builder_answer builder_dep
+    builder_edit builder_model_answer builder_open builder_ring built byline
+    call call_ready call_woken called calls cancel cancelled chat_account
     chat_hears chat_message chat_post chat_private chat_room chat_serves
     checkout chosen cites cli_grant code_review comment commit comp compat
     completed connection connection_given contains content conversation cost

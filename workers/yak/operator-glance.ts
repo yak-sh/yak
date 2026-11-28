@@ -6,6 +6,7 @@
 // tools (`looks`). All of it is read: every action stays with the Operator,
 // which the voice asks (operator-calls.ts `ASK`).
 import { line } from '@yaks/query'
+import { clockItem } from '@yaks/platform/local-time'
 import type { Directory } from './directory.ts'
 import { moment } from './html.ts'
 import { rootAt } from './operator-root.ts'
@@ -30,6 +31,7 @@ export type Glance = {
   dir: Pick<Directory, 'reachable'>
   /** now, in milliseconds: the runtime's */
   now?: () => number
+  zone?: () => Promise<string | undefined>
 }
 
 // How many of the conversation's newest lines the voice is told as the call
@@ -155,9 +157,9 @@ export let appsText = async (g: Glance) => {
  * whenever it moves. */
 export let glanceOf = (g: Glance) => ({
   recent: async () => {
-    let said = await recentOf(g)
+    let [said, zone] = await Promise.all([recentOf(g), g.zone?.()])
     return [
-      `It is ${moment(new Date(g.now?.() ?? Date.now()).toISOString())}.`,
+      clockItem(zone, g.now?.()),
       said
         ? `The newest of your conversation with them, oldest first:\n${said}`
         : 'They have not talked with you before.',

@@ -164,10 +164,13 @@ test('a voice receives recent history with each writer preserved, including lega
 })
 
 test("a call's voice is told the time, the newest of the conversation, and the work under way with its step and how far it got", async () => {
-  let glance = glanceOf(g)
+  let glance = glanceOf({
+    ...g,
+    zone: () => Promise.resolve('America/Detroit'),
+  })
   equal(
     await glance.recent(),
-    'It is Nov 6th, 2026, 9:04 PM UTC.\n' +
+    'The person’s current local time is Friday, November 6, 2026 at 4:04 PM GMT-05:00 (America/Detroit).\n' +
       `The newest of your conversation with them, oldest first:\n${SAID}`,
   )
   equal(

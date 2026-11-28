@@ -117,6 +117,7 @@
     "./still": "./still.ts",
     "./signed-in": "./signed-in.ts",
     "./place": "./place.ts",
+    "./local-time": "./local-time.ts",
     "./located": "./located.ts",
     "./named": "./named.ts",
     "./preview-audit": "./preview-audit.ts",

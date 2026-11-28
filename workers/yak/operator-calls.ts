@@ -55,6 +55,7 @@ import type { Env } from './env.ts'
 import { defect } from './defects.ts'
 import { opened, seal } from './lib/token.ts'
 import { apex } from '@yaks/platform/host'
+import { clockItem, timePolicy } from '@yaks/platform/local-time'
 import { countedSpend } from './meter.ts'
 import { phoneAt } from './phones.ts'
 import {
@@ -828,14 +829,18 @@ export let instructed = (name: string, duplex = false, room?: string) =>
       ? `${butler(name, room)}\n\n${DUPLEX}`
       : `${butler(name, room)} ${TURNED}`,
     ...room ? [ROOM(name)] : [],
+    timePolicy,
+    'For a question about the current time, ask the Operator for a fresh reading.',
     LISTENING(name, duplex),
   ].join('\n\n')
 
 /** What a larger model a talking model hands hard requests to on its
  * provider's side is told: that it works for the caller's Operator on a live
  * call, with the Operator's tools, and hands longer work to the Operator. */
-export let backed = (name: string, now: Date) =>
-  `You work for ${name}, a person's Operator on yaks.app, while it is on the phone with them: it hands you what they ask that needs thought, facts, their apps or something done. Transcripts of the call can have mistakes and unfinished phrases; use the latest of what they said, and when a detail you need is unclear, say what to ask them instead of guessing. You have the Operator's tools: use them for their apps, rows, messages, reminders and memory. Anything that takes more than a few steps, such as building or changing an app, or that needs the Operator's own conversation with them, give to the ask tool in their words, and report what it answers. It is ${now.toISOString()} now. Answer in a sentence or two of plain words with the facts and what was done, and say something was done only once a tool said so. Leave out their name: the call already greets them by it.`
+export let backed = (name: string, now: Date, zone?: string) =>
+  `You work for ${name}, a person's Operator on yaks.app, while it is on the phone with them: it hands you what they ask that needs thought, facts, their apps or something done. Transcripts of the call can have mistakes and unfinished phrases; use the latest of what they said, and when a detail you need is unclear, say what to ask them instead of guessing. You have the Operator's tools: use them for their apps, rows, messages, reminders and memory. Anything that takes more than a few steps, such as building or changing an app, or that needs the Operator's own conversation with them, give to the ask tool in their words, and report what it answers. Answer in a sentence or two of plain words with the facts and what was done, and say something was done only once a tool said so. Leave out their name: the call already greets them by it. ${timePolicy} ${
+    clockItem(zone, now.getTime())
+  } The clock was read at the start of the call. For the current time, use the ask tool for a fresh reading.`
 
 /**
  * One call's conversation with a model that hears and speaks itself: the
@@ -1264,11 +1269,24 @@ export let calling = async (
     keeping(text, o)
     return noted
   }
+  let localZone = ticket.room ? undefined : async () => {
+    let [{ kept }, { zoneOf }] = await Promise.all([
+      import('./whereabouts.ts'),
+      import('@yaks/platform/located'),
+    ])
+    return zoneOf(await kept(env), ticket.person)
+  }
+  let zone: Promise<string | undefined> | undefined
   let glance = {
     store: operator.store,
     space: space.eid,
     person: ticket.person,
     dir: directoryOf(env.STORE),
+    zone: () =>
+      zone ??= localZone?.().catch((e) => {
+        defect(e, { ...CALL, request: 'call local time' })
+        return undefined
+      }) ?? Promise.resolve(undefined),
   }
   let looked = looks(glance)
   let name = space.operator ?? 'the Operator'
@@ -1317,7 +1335,9 @@ export let calling = async (
       ? {
         backend: {
           model: setup.backend,
-          instructions: `${backed(name, new Date())}\n\n${FIXED}`,
+          instructions: `${
+            backed(name, new Date(), await glance.zone())
+          }\n\n${FIXED}`,
           tools: [
             ...tools,
             ...own.tools.filter((o) => !tools.some((m) => m.name == o.name)),
