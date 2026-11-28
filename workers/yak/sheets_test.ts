@@ -74,8 +74,14 @@ for (let root of ['style.css', 'pages.css']) {
 
 test('sheets: a head names one sheet, on this site, with the font preloaded', () => {
   let env = { APEX: 'yaks.fyi' }
-  let head = sheeted('<link rel="stylesheet" href="style.css" />', env, names)
-  assertEquals(blocking(head), [`https://yaks.fyi/${names['style.css']}`])
+  let head = sheeted(
+    '<head><script>app()</script><link rel="stylesheet" href="style.css" /></head>',
+    env,
+    names,
+  )
+  let css = `https://yaks.fyi/${names['style.css']}`
+  assertEquals(blocking(head), [css])
+  assert(head.startsWith(`<head><link rel="preload" as="style" href="${css}">`))
   assertStringIncludes(
     head,
     `<link rel="preload" href="https://yaks.fyi/${
@@ -164,6 +170,8 @@ test('sheets: a static page, the home page and a kernel page wait on no other si
     await (await k.at('yaks.app', '/docs')).text(),
     await lost().text(),
   ]
+  assert(!pages[0].includes('_dates.js'))
+  assertStringIncludes(pages[1], '_dates.js')
   for (let page of pages) {
     assertEquals(page.includes('fonts.g'), false)
     assertEquals(blocking(page).length, 1)

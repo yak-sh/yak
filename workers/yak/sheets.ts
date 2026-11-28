@@ -105,11 +105,9 @@ export let links = (
     ...opening(at('apple-touch-icon.png'), url(env, '/api/report')),
     retryBlank: base == null,
   })
-  return `${
-    reported ? '' : reporter
-  }${opens}<script data-yak-open="${timed}">${openScript()}</script>${
-    interaction(env, names, base)
-  }
+  return `${reported ? '' : reporter}${opens}${
+    reported ? '' : `<script data-yak-open="${timed}">${openScript()}</script>`
+  }${interaction(env, names, base)}
 ${icon}
 <link rel="preload" href="${at(FONT)}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${at(sheet)}">`
@@ -118,6 +116,7 @@ ${icon}
 // The platform's scripts an app's page is woven (page-script.ts), the
 // reporter first: the home app's pages come with them (site.ts `HOME`).
 let WOVEN = /<script data-yak-at="[^"]*" data-yak-version="/
+let SHEET = /<link rel="stylesheet" href="([\w-]+\.css)"\s*\/?>/
 
 // A `src` or `href` naming a file at the site's root.
 let NAMING = /\b(src|href)=(["'])\/?([\w.-]+)\2/g
@@ -128,10 +127,16 @@ let NAMING = /\b(src|href)=(["'])\/?([\w.-]+)\2/g
  * names at its content-made address. A page the home app served wears the
  * reporter already (`links`), and its island draws the pencil for a person
  * who may write it. */
-export let sheeted = (html: string, env: Host, names = NAMES) =>
-  html.replace(
+export let sheeted = (html: string, env: Host, names = NAMES) => {
+  let sheet = html.match(SHEET)?.[1]
+  let woven = WOVEN.test(html)
+  // Start the fetch before the app's inline scripts and install metadata.
+  let preload = sheet
+    ? `<link rel="preload" as="style" href="${asset(env, sheet, names)}">`
+    : ''
+  return html.replace(
     /<head>/i,
-    (head) => head + importMap((name) => asset(env, name, names)),
+    (head) => head + preload + importMap((name) => asset(env, name, names)),
   )
     .replace(/<body([^>]*)>/i, (_, attrs: string) => {
       let classes = attrs.match(/\sclass=(?:"[^"]*"|'[^']*')/)?.[0] ?? ''
@@ -139,12 +144,12 @@ export let sheeted = (html: string, env: Host, names = NAMES) =>
     })
     .replace(/<\/body>/i, '</div></body>')
     .replace(
-      /<link rel="stylesheet" href="([\w-]+\.css)"\s*\/?>/,
-      (_, sheet: string) =>
-        `${links(env, sheet, names, undefined, WOVEN.test(html))}\n${
+      SHEET,
+      (_, name: string) =>
+        `${links(env, name, names, undefined, woven)}\n${
           island(
             asset(env, '_ready.js', names),
-            WOVEN.test(html) ? asset(env, 'edit.js', names) : undefined,
+            woven ? asset(env, 'edit.js', names) : undefined,
           )
         }`,
     ).replace(
@@ -158,6 +163,7 @@ export let sheeted = (html: string, env: Host, names = NAMES) =>
           ? `${attr}=${quote}${asset(env, name, names)}${quote}`
           : whole,
     )
+}
 
 /** The source behind a content-made address, for one no longer deployed. */
 export let named = (path: string) => {

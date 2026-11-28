@@ -405,6 +405,7 @@ export let Told = (
       path={path}
       kind='Home Story_Page'
       sheet='_home.css'
+      dates={false}
       robots={robots}
       sections={[
         ...landing.features.map((feature) => FEATURES[feature].section),

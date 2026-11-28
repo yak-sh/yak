@@ -149,6 +149,9 @@ test("the home app's page wears the platform's reporter once, posting to the ape
   assert(at.length > 0, front.text)
   assert(at.every((a) => a == '/'), at.join(' '))
   assert(!/<script src="[^"]*report\.js"/.test(front.text), front.text)
+  let openers = front.text.match(/<script\b[^>]*data-yak-open="[^"]+"/g)
+  assertEquals(openers?.length, 1)
+  assertStringIncludes(openers![0], 'data-yak-open="/api/interaction?open=1"')
 })
 
 test("a page the home app has none of is the Worker's own", () => {

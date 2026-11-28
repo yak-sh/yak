@@ -207,6 +207,7 @@ export let Page = (
     foot,
     sheet,
     sections,
+    dates = true,
     children,
   }: {
     copy: string
@@ -219,6 +220,7 @@ export let Page = (
     before?: ReactNode
     after?: ReactNode
     foot?: ReactNode
+    dates?: boolean
     children: ReactNode
   },
 ) => (
@@ -231,7 +233,7 @@ export let Page = (
       <Top path={path} sections={sections} />
       <main className={kind ? 'Page' : 'Page Prose'}>{children}</main>
       {foot ?? <Foot />}
-      <script type='module' src='_dates.js' />
+      {dates && <script type='module' src='_dates.js' />}
       {after}
     </body>
   </html>
