@@ -187,7 +187,15 @@ call only between them and the Operators' numbers; never a person's number.
 | number         | role                                                                                                      |
 | -------------- | --------------------------------------------------------------------------------------------------------- |
 | +12694929622   | the checks person's phone: the number checks texts and calls from (`test-call.ts --from`), held by no space |
-| +12692383446   | the `checks` space's own number (`number_status --space checks --as checks`): checks' Operator answers on it |
+| +12692383446   | the `checks` space's own number (`number_status --space checks --as checks`): checks' Operator answers texts on it |
+
+A test call goes to yaks.app's own number, +18663141594 (PHONE_SENDER), with
+`.claude/skills/yaks-app/scripts/test-call.ts --from +12694929622`; a call to
++12692383446 is not answered. checks' Operator answers calls with its own
+model, turn by turn, which keeps no line of the call and takes no notes. A
+check of a call's lines or notes sets a voice way whose model hears and speaks
+itself ("Quickest", `gpt-realtime-2.1-mini`) on `/manage/checks/operator`
+first, and sets checks' own back after.
 
 Send from +12694929622 with the Telnyx API (key: `op read 'op://Yak Shaving
 LLC/telnyx API/credential'`), `POST /v2/messages` for one text, and read
